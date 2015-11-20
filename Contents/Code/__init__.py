@@ -3,6 +3,8 @@ import os
 import sys
 
 # just some slight modifications to support sum and iter again
+import traceback
+
 from subzero.sandbox import restore_builtins
 
 module = sys.modules['__main__']
@@ -17,20 +19,18 @@ import logger
 
 sys.modules["logger"] = logger
 
-from subzero import intent
 import subliminal
 import subliminal_patch
 import support
 
 import interface
-
 sys.modules["interface"] = interface
 
 from subzero.constants import OS_PLEX_USERAGENT, PERSONAL_MEDIA_IDENTIFIER
 from subzero import intent
 from interface.menu import *
 from support.subtitlehelpers import getSubtitlesFromMetadata, force_utf8
-from support.storage import storeSubtitleInfo
+from support.storage import storeSubtitleInfo, whackMissingParts
 from support.config import config
 
 
@@ -311,6 +311,8 @@ class SubZeroAgent(object):
             scanned_parts = scanParts(parts, kind=self.agent_type)
             subtitles = downloadBestSubtitles(scanned_parts, min_score=int(use_score))
             item_ids = getItemIDs(media, kind=self.agent_type)
+
+            whackMissingParts(videos)
 
             if subtitles:
                 saveSubtitles(scanned_parts, subtitles)

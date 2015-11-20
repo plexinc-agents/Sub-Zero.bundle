@@ -8,6 +8,34 @@ def getSubtitleInfo(rating_key):
     return Dict["subs"].get(rating_key)
 
 
+def whackMissingParts(videos, existing_parts=None):
+    """
+    cleans out our internal storage's video parts (parts may get updated/deleted/whatever)
+    :param existing_parts: optional list of part ids known
+    :param videos: videos to check for
+    :return:
+    """
+    # shortcut
+    if not existing_parts:
+        existing_parts = []
+        for part in videos.viewvalues():
+            existing_parts.append(part.id)
+
+    whacked_parts = False
+    for video in videos.keys():
+        if video.id not in Dict["subs"]:
+            continue
+
+        for part_id in Dict["subs"][video.id].keys():
+            if part_id not in existing_parts:
+                del Dict["subs"][video.id][part_id]
+                Log.Info("Whacking part %s in internal storage of video %s", part_id, video.id)
+                whacked_parts = True
+
+    if whacked_parts:
+        Dict.Save()
+
+
 def storeSubtitleInfo(videos, subtitles, storage_type):
     """
     stores information about downloaded subtitles in plex's Dict()
@@ -17,6 +45,7 @@ def storeSubtitleInfo(videos, subtitles, storage_type):
 
     storage = Dict["subs"]
 
+    existing_parts = []
     for video, video_subtitles in subtitles.items():
         part = videos[video]
 
@@ -26,6 +55,8 @@ def storeSubtitleInfo(videos, subtitles, storage_type):
         video_dict = storage[video.id]
         if part.id not in video_dict:
             video_dict[part.id] = {}
+
+        existing_parts.append(part.id)
 
         part_dict = video_dict[part.id]
         for subtitle in video_subtitles:
@@ -38,6 +69,8 @@ def storeSubtitleInfo(videos, subtitles, storage_type):
                                       date_added=datetime.datetime.now())
             lang_dict["current"] = sub_key
 
+    if existing_parts:
+        whackMissingParts(videos, existing_parts=existing_parts)
     Dict.Save()
 
 
