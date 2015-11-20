@@ -48,6 +48,8 @@ def storeSubtitleInfo(videos, subtitles, storage_type):
         if video.id not in storage:
             storage[video.id] = {}
 
+        # fixme: get video section
+
         video_dict = storage[video.id]
         if part.id not in video_dict:
             video_dict[part.id] = {}

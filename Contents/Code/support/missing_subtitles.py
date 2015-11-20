@@ -128,7 +128,7 @@ def getMissingItems():
                 else:
                     if data["key"] in ignore_list.videos:
                         continue
-                        
+
                     item_title = format_video("movie", data["title"], section_title="Movie", add_section_title=True)
                 items.append((unicode(item_title), data["key"]))
         items.sort()
