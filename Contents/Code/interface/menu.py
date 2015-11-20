@@ -6,7 +6,7 @@ from support.config import config
 from support.helpers import pad_title, timestamp
 from support.auth import refresh_plex_token
 from support.ignore import ignore_list
-from support.missing_subtitles import getAllMissing
+from support.missing_subtitles import getRecentMissing, getMissingItems
 from support.storage import resetStorage, logStorage
 from support.items import getRecentItems, MI_DEEPER, MI_KIND, get_items_info
 from support.items import getOnDeckItems, refreshItem, getAllItems
@@ -44,7 +44,7 @@ def fatality(randomize=None, force_title=None, header=None, message=None, only_r
             summary="Shows the current on deck items and allows you to individually (force-) refresh their metadata/subtitles."
         ))
         oc.add(DirectoryObject(
-            key=Callback(RecentlyAddedMenu),
+            key=Callback(MissingSubtitlesMenu),
             title="Items with missing subtitles",
             summary="Shows the items honoring the configured 'Item age to be considered recent'-setting (%s)"
                     " and allowing you to individually (force-) refresh their metadata/subtitles. " % Prefs["scheduler.item_is_recent_age"]
@@ -102,22 +102,48 @@ def OnDeckMenu(message=None):
     return mergedItemsMenu(title="Items On Deck", base_title="Items On Deck", itemGetter=getOnDeckItems)
 
 
-@route(PREFIX + '/recent')
-def RecentlyAddedMenu(message=None):
-    return recentItemsMenu(title="Missing Subtitles", base_title="Missing Subtitles")
-
-
-def recentItemsMenu(title, base_title=None):
+@route(PREFIX + '/missing')
+def MissingSubtitlesMenu(message=None):
+    title = "Missing Subtitles"
     oc = ObjectContainer(title2=title, no_cache=True, no_history=True)
+    oc.add(DirectoryObject(
+        key=Callback(recentItemsMenu, title="Recently added items", base_title=title),
+        title="Recently added items"
+    ))
+    oc.add(DirectoryObject(
+        key=Callback(missingSubtitlesItemsInStorageMenu, title="All known items with missing external subtitles", base_title=title),
+        title="All known items with missing external subtitles"
+    ))
+    return oc
+
+
+@route(PREFIX + '/missing/recent')
+def recentItemsMenu(title, base_title=None):
+    oc = ObjectContainer(title2=base_title + " > " + title, no_cache=True, no_history=True)
     recent_items = getRecentItems()
     if recent_items:
-        missing_items = getAllMissing(recent_items)
+        missing_items = getRecentMissing(recent_items)
         if missing_items:
             for added_at, item_id, title in missing_items:
                 oc.add(DirectoryObject(
                     key=Callback(RefreshItemMenu, title=base_title + " > " + title, item_title=title, rating_key=item_id), title=title
                 ))
 
+    return oc
+
+
+@route(PREFIX + '/missing/storage')
+def missingSubtitlesItemsInStorageMenu(title, base_title=None):
+    oc = ObjectContainer(title2=base_title + " > " + title, no_cache=True, no_history=True)
+    missing_items = getMissingItems()
+    if not missing_items:
+        return oc
+
+    for title, rating_key in missing_items:
+        oc.add(DirectoryObject(
+            title=title,
+            key=Callback(RefreshItemMenu, title=base_title + " > " + title, item_title=title, rating_key=rating_key)
+        ))
     return oc
 
 

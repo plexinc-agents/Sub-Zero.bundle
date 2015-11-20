@@ -3,7 +3,7 @@
 import datetime
 import time
 
-from missing_subtitles import getAllMissing, refresh_item
+from missing_subtitles import getRecentMissing, refresh_item
 from background import scheduler
 from support.items import getRecentItems
 
@@ -83,7 +83,7 @@ class SearchAllRecentlyAddedMissing(Task):
     def prepare(self):
         self.items_done = []
         recent_items = getRecentItems()
-        missing = getAllMissing(recent_items)
+        missing = getRecentMissing(recent_items)
         ids = set([id for added_at, id, title in missing])
         self.items_searching = missing
         self.items_searching_ids = ids
@@ -125,7 +125,7 @@ class SearchAllRecentlyAddedMissing(Task):
             # we can't hammer the PMS, otherwise requests will be stalled
             time.sleep(1)
 
-        Log.Debug("Task: %s, done. Failed items: %s", self.name, self.items_failed)
+        Log.Debug("Task: %s, done. Items that didn't finish properly: %s", self.name, self.items_failed)
         self.running = False
 
     def post_run(self):
