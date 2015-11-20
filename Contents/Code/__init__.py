@@ -3,6 +3,8 @@ import os
 import sys
 
 # just some slight modifications to support sum and iter again
+import traceback
+
 from subzero.sandbox import restore_builtins
 
 module = sys.modules['__main__']
@@ -27,7 +29,7 @@ from subzero.constants import OS_PLEX_USERAGENT, DEPENDENCY_MODULE_NAMES, PERSON
 from subzero import intent
 from interface.menu import *
 from support.subtitlehelpers import getSubtitlesFromMetadata
-from support.storage import storeSubtitleInfo
+from support.storage import storeSubtitleInfo, whackMissingParts
 from support.config import config
 
 
@@ -233,10 +235,15 @@ class SubZeroAgent(object):
             videos, subtitles = getattr(self, "update_%s" % self.agent_type)(metadata, media, lang)
             item_ids = getItemIDs(media, kind=self.agent_type)
 
+            whackMissingParts(videos)
+
             if subtitles:
                 saveSubtitles(videos, subtitles)
 
             updateLocalMedia(metadata, media, media_type=self.agent_type)
+
+        except Exception, e:
+            Log.Error("Something went wrong: %s", traceback.format_exc())
 
         finally:
             # update the menu state
