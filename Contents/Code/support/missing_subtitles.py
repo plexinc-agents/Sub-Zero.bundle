@@ -103,11 +103,14 @@ def getMissingItems():
     if not missing_subs:
         return
 
+    container_start = 0
+    container_limit = 200
+    full_limit = 5000
     args = {
-        "X-Plex-Container-Start": "0",
-        "X-Plex-Container-Size": "200"
+        "X-Plex-Container-Start": "%s" % container_start,
+        "X-Plex-Container-Size": "%s" % container_limit
     }
-    url = "https://127.0.0.1:32400/library/metadata/%s" % ",".join(missing_subs)
+    url = "https://127.0.0.1:32400/library/metadata/%s" % ",".join(missing_subs[:full_limit])
     response = query_plex(url, args)
 
     by_type = storage_type_re.findall(response.content)
