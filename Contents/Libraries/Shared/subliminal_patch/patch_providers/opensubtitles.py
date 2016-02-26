@@ -12,14 +12,27 @@ logger = logging.getLogger(__name__)
 
 class PatchedOpenSubtitlesSubtitle(OpenSubtitlesSubtitle):
     def __init__(self, language, hearing_impaired, page_link, subtitle_id, matched_by, movie_kind, hash, movie_name,
-                 movie_release_name, movie_year, movie_imdb_id, series_season, series_episode, query_parameters):
+                 movie_release_name, movie_year, movie_imdb_id, series_season, series_episode, query_parameters, fps):
         super(PatchedOpenSubtitlesSubtitle, self).__init__(language, hearing_impaired, page_link, subtitle_id, matched_by, movie_kind, hash,
                                                            movie_name,
                                                            movie_release_name, movie_year, movie_imdb_id, series_season, series_episode)
         self.query_parameters = query_parameters or {}
+        self.fps = fps
 
     def get_matches(self, video, hearing_impaired=False):
         matches = super(PatchedOpenSubtitlesSubtitle, self).get_matches(video, hearing_impaired=hearing_impaired)
+
+        sub_fps = None
+        try:
+            sub_fps = float(self.fps)
+        except ValueError:
+            pass
+
+        # video has fps info, sub also, and sub's fps is greater than 0
+        if video.fps and sub_fps and (video.fps != self.fps):
+            logger.debug("Wrong FPS (expected: %s, got: %s, lowering score massively)", video.fps, self.fps)
+            # fixme: may be too harsh
+            return set()
 
         # matched by tag?
         if self.matched_by == "tag":
@@ -30,12 +43,16 @@ class PatchedOpenSubtitlesSubtitle(OpenSubtitlesSubtitle):
 
 
 class PatchedOpenSubtitlesProvider(OpenSubtitlesProvider):
-    def __init__(self, username=None, password=None):
+    def __init__(self, username=None, password=None, use_tag_search=False):
         if username is not None and password is None or username is None and password is not None:
             raise ConfigurationError('Username and password must be specified')
 
         self.username = username or ''
         self.password = password or ''
+        self.use_tag_search = use_tag_search
+
+        if use_tag_search:
+            logger.info("Using tag/exact filename search")
 
         super(PatchedOpenSubtitlesProvider, self).__init__()
 
@@ -47,7 +64,6 @@ class PatchedOpenSubtitlesProvider(OpenSubtitlesProvider):
 
     def list_subtitles(self, video, languages):
         """
-
         :param video:
         :param languages:
         :return:
@@ -65,14 +81,14 @@ class PatchedOpenSubtitlesProvider(OpenSubtitlesProvider):
             query = video.title
 
         return self.query(languages, hash=video.hashes.get('opensubtitles'), size=video.size, imdb_id=video.imdb_id,
-                          query=query, season=season, episode=episode, tag=os.path.basename(video.name))
+                          query=query, season=season, episode=episode, tag=os.path.basename(video.name), use_tag_search=self.use_tag_search)
 
-    def query(self, languages, hash=None, size=None, imdb_id=None, query=None, season=None, episode=None, tag=None):
+    def query(self, languages, hash=None, size=None, imdb_id=None, query=None, season=None, episode=None, tag=None, use_tag_search=False):
         # fill the search criteria
         criteria = []
         if hash and size:
             criteria.append({'moviehash': hash, 'moviebytesize': str(size)})
-        if tag:
+        if use_tag_search and tag:
             criteria.append({'tag': tag})
         if imdb_id:
             criteria.append({'imdbid': imdb_id})
@@ -111,13 +127,14 @@ class PatchedOpenSubtitlesProvider(OpenSubtitlesProvider):
             movie_release_name = subtitle_item['MovieReleaseName']
             movie_year = int(subtitle_item['MovieYear']) if subtitle_item['MovieYear'] else None
             movie_imdb_id = int(subtitle_item['IDMovieImdb'])
+            movie_fps = subtitle_item.get('MovieFPS')
             series_season = int(subtitle_item['SeriesSeason']) if subtitle_item['SeriesSeason'] else None
             series_episode = int(subtitle_item['SeriesEpisode']) if subtitle_item['SeriesEpisode'] else None
             query_parameters = subtitle_item.get("QueryParameters")
 
             subtitle = PatchedOpenSubtitlesSubtitle(language, hearing_impaired, page_link, subtitle_id, matched_by, movie_kind,
                                                     hash, movie_name, movie_release_name, movie_year, movie_imdb_id,
-                                                    series_season, series_episode, query_parameters)
+                                                    series_season, series_episode, query_parameters, fps=movie_fps)
             logger.debug('Found subtitle %r', subtitle)
             subtitles.append(subtitle)
 

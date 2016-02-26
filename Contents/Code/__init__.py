@@ -16,6 +16,7 @@ for key, value in getattr(module, "__builtins__").iteritems():
 import logger
 sys.modules["logger"] = logger
 
+from subzero import intent
 import subliminal
 import subliminal_patch
 import support
@@ -117,6 +118,14 @@ def parseMediaToParts(media, kind="series"):
     return use_parts
 
 
+def getFPS(streams):
+    for stream in streams:
+        # video
+        if stream.type == 1:
+            return stream.frameRate
+    return "25.000"
+
+
 def scanParts(parts, kind="series"):
     """
     receives a list of parts containing dictionaries returned by flattenToParts
@@ -129,6 +138,7 @@ def scanParts(parts, kind="series"):
         force_refresh = intent.get("force", part["id"])
         hints = {"expected_title": [part["title"]]}
         hints.update({"type": "episode", "expected_series": [part["series"]]} if kind == "series" else {"type": "movie"})
+        part["video"].fps = getFPS(part["video"].streams)
         scanned_video = scanVideo(part["video"], ignore_all=force_refresh, hints=hints)
         if not scanned_video:
             continue
@@ -160,7 +170,8 @@ def scanVideo(part, ignore_all=False, hints=None):
     Log.Debug("Scanning video: %s, subtitles=%s, embedded_subtitles=%s" % (part.file, external_subtitles, embedded_subtitles))
 
     try:
-        return subliminal.video.scan_video(part.file, subtitles=external_subtitles, embedded_subtitles=embedded_subtitles, hints=hints or {})
+        return subliminal.video.scan_video(part.file, subtitles=external_subtitles, embedded_subtitles=embedded_subtitles, hints=hints or {},
+                                           video_fps=part.fps)
 
     except ValueError:
         Log.Warn("File could not be guessed by subliminal")
@@ -265,13 +276,15 @@ def updateLocalMedia(metadata, media, media_type="movies"):
 
 class SubZeroAgent(object):
     agent_type = None
+    agent_type_verbose = None
     languages = [Locale.Language.English]
     primary_provider = False
+    score_prefs_key = None
 
     def __init__(self, *args, **kwargs):
         super(SubZeroAgent, self).__init__(*args, **kwargs)
         self.agent_type = "movies" if isinstance(self, Agent.Movies) else "series"
-        self.name = "Sub-Zero Subtitles (%s, %s)" % ("Movies" if self.agent_type == "movies" else "TV", config.getVersion())
+        self.name = "Sub-Zero Subtitles (%s, %s)" % (self.agent_type_verbose, config.getVersion())
 
     def search(self, results, media, lang):
         Log.Debug("Sub-Zero %s, %s search" % (config.version, self.agent_type))
@@ -290,7 +303,7 @@ class SubZeroAgent(object):
         try:
             initSubliminalPatches()
             parts = parseMediaToParts(media, kind=self.agent_type)
-            use_score = Prefs["subtitles.search.minimumMovieScore" if self.agent_type == "movies" else "subtitles.search.minimumTVScore"]
+            use_score = Prefs[self.score_prefs_key]
             scanned_parts = scanParts(parts, kind=self.agent_type)
             subtitles = downloadBestSubtitles(scanned_parts, min_score=int(use_score))
             item_ids = getItemIDs(media, kind=self.agent_type)
@@ -314,7 +327,11 @@ class SubZeroAgent(object):
 
 class SubZeroSubtitlesAgentMovies(SubZeroAgent, Agent.Movies):
     contributes_to = ['com.plexapp.agents.imdb', 'com.plexapp.agents.xbmcnfo', 'com.plexapp.agents.themoviedb', 'com.plexapp.agents.hama']
+    score_prefs_key = "subtitles.search.minimumMovieScore"
+    agent_type_verbose = "Movies"
 
 
 class SubZeroSubtitlesAgentTvShows(SubZeroAgent, Agent.TV_Shows):
     contributes_to = ['com.plexapp.agents.thetvdb', 'com.plexapp.agents.thetvdbdvdorder', 'com.plexapp.agents.xbmcnfotv', 'com.plexapp.agents.hama']
+    score_prefs_key = "subtitles.search.minimumTVScore"
+    agent_type_verbose = "TV"
