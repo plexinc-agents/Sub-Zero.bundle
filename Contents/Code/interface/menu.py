@@ -13,7 +13,7 @@ from support.items import getOnDeckItems, refreshItem, getAllItems
 from support.items import getRecentItems, get_items_info
 from support.lib import Plex, lib_unaccessible_error
 from support.missing_subtitles import getAllMissing
-from support.storage import resetStorage, logStorage
+from support.storage import resetStorage, logStorage, getSubtitleInfo
 
 # init GUI
 ObjectContainer.art = R(ART)
@@ -131,7 +131,7 @@ def recentItemsMenu(title, base_title=None):
         if missing_items:
             for added_at, item_id, title in missing_items:
                 oc.add(DirectoryObject(
-                    key=Callback(RefreshItemMenu, title=base_title + " > " + title, item_title=title, rating_key=item_id), title=title
+                    key=Callback(ItemDetailsMenu, title=base_title + " > " + title, item_title=title, rating_key=item_id), title=title
                 ))
 
     return oc
@@ -144,7 +144,7 @@ def mergedItemsMenu(title, itemGetter, itemGetterKwArgs=None, base_title=None, *
     for kind, title, item_id, deeper, item in items:
         oc.add(DirectoryObject(
             title=title,
-            key=Callback(RefreshItemMenu, title=base_title + " > " + title, item_title=title, rating_key=item_id)
+            key=Callback(ItemDetailsMenu, title=base_title + " > " + title, item_title=title, rating_key=item_id)
         ))
 
     return oc
@@ -281,7 +281,7 @@ def MetadataMenu(rating_key, title=None, base_title=None, display_items=False, p
         if should_display_ignore(items, previous=previous_item_type):
             add_ignore_options(oc, "series", title=item_title, rating_key=rating_key, callback_menu=IgnoreMenu)
     else:
-        return RefreshItemMenu(rating_key=rating_key, title=title, item_title=item_title)
+        return ItemDetailsMenu(rating_key=rating_key, title=title, item_title=item_title)
 
     return oc
 
@@ -297,7 +297,7 @@ def IgnoreListMenu():
 
 
 @route(PREFIX + '/item/{rating_key}/actions')
-def RefreshItemMenu(rating_key, title=None, base_title=None, item_title=None, came_from="/recent"):
+def ItemDetailsMenu(rating_key, title=None, base_title=None, item_title=None, came_from="/recent"):
     title = unicode(base_title) + " > " + unicode(title) if base_title else unicode(title)
     oc = ObjectContainer(title2=title, replace_parent=True)
     oc.add(DirectoryObject(
@@ -310,6 +310,26 @@ def RefreshItemMenu(rating_key, title=None, base_title=None, item_title=None, ca
         title=u"Force-Refresh: %s" % item_title,
         summary="Issues a forced refresh, ignoring known subtitles and searching for new ones"
     ))
+    current_subtitle_info = getSubtitleInfo(rating_key)
+    if current_subtitle_info:
+        parts = current_subtitle_info.iteritems()
+        single = len(current_subtitle_info) == 1
+        for part, data in parts:
+            for lang_short in config.langList:
+                current_subtitle_key = data.get(lang_short, {}).get("current")
+                if current_subtitle_key:
+                    current_subtitle = data[lang_short][current_subtitle_key]
+
+                    oc.add(DirectoryObject(
+                        key=Callback(RefreshItem, rating_key=rating_key, item_title=item_title),
+                        title=u"%sCurrent subtitle: %s, "
+                              u"Language: %s, Score: %i" % (("Part %i, " % part) if not single else "",
+                                                            current_subtitle_key[0], lang_short, current_subtitle["score"]),
+                        summary="Storage: %s, \nFrom: %s" % (current_subtitle["storage"], current_subtitle["link"])
+                    ))
+                else:
+                    print "no current subtitle"
+
     add_ignore_options(oc, "videos", title=item_title, rating_key=rating_key, callback_menu=IgnoreMenu)
 
     return oc

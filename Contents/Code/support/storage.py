@@ -4,6 +4,10 @@ import datetime
 import pprint
 
 
+def getSubtitleInfo(rating_key):
+    return Dict["subs"].get(rating_key)
+
+
 def storeSubtitleInfo(videos, subtitles, storage_type):
     """
     stores information about downloaded subtitles in plex's Dict()
@@ -32,6 +36,7 @@ def storeSubtitleInfo(videos, subtitles, storage_type):
             sub_key = (subtitle.provider_name, subtitle.id)
             lang_dict[sub_key] = dict(score=subtitle.score, link=subtitle.page_link, storage=storage_type, hash=Hash.MD5(subtitle.content),
                                       date_added=datetime.datetime.now())
+            lang_dict["current"] = sub_key
 
     Dict.Save()
 
