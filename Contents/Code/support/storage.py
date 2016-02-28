@@ -16,6 +16,7 @@ def whackMissingParts(videos, existing_parts=None):
     :return:
     """
     # shortcut
+
     if not existing_parts:
         existing_parts = []
         for part in videos.viewvalues():

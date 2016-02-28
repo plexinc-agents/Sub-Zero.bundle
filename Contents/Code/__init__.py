@@ -133,7 +133,7 @@ def scanParts(parts, kind="series"):
     receives a list of parts containing dictionaries returned by flattenToParts
     :param parts:
     :param kind: series or movies
-    :return: dictionary of scanned videos of subliminal.video.scan_video
+    :return: dictionary of subliminal.video.scan_video, key=subliminal scanned video, value=plex file part
     """
     ret = {}
     for part in parts:
@@ -312,7 +312,7 @@ class SubZeroAgent(object):
             subtitles = downloadBestSubtitles(scanned_parts, min_score=int(use_score))
             item_ids = getItemIDs(media, kind=self.agent_type)
 
-            whackMissingParts(videos)
+            whackMissingParts(scanned_parts)
 
             if subtitles:
                 saveSubtitles(scanned_parts, subtitles)
