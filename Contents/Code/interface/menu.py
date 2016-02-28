@@ -310,14 +310,24 @@ def ItemDetailsMenu(rating_key, title=None, base_title=None, item_title=None, ca
         title=u"Force-Refresh: %s" % item_title,
         summary="Issues a forced refresh, ignoring known subtitles and searching for new ones"
     ))
+
+    # get stored subtitle info for item id
     current_subtitle_info = getSubtitleInfo(rating_key)
     if current_subtitle_info:
+
+        # get current media info for that item
         media = list(Plex["library"].metadata(rating_key))[0].media
         for part in media.parts:
+
+            # get corresponding stored subtitle data for that media part (physical media item)
             sub_part_data = current_subtitle_info.get(str(part.id))
             if sub_part_data:
+
+                # iterate through all configured languages
                 for lang_short in config.langList:
-                    current_subtitle_data = sub_part_data.get(lang_short, (None, None)).get("current")
+
+                    # try getting current subtitle information for that language
+                    current_subtitle_data = sub_part_data.get(lang_short, {}).get("current", (None, None))
                     current_sub_provider_name, current_sub_id = current_subtitle_data
                     summary = "No current subtitle"
                     if current_sub_provider_name:
@@ -329,7 +339,7 @@ def ItemDetailsMenu(rating_key, title=None, base_title=None, item_title=None, ca
 
                     oc.add(DirectoryObject(
                         key=Callback(RefreshItem, rating_key=rating_key, item_title=item_title),
-                        title=u"Manually list subtitles of: %s" % os.path.basename(part.file),
+                        title=u"Manually list available subtitles for: %s" % os.path.basename(part.file),
                         summary=summary
                     ))
 

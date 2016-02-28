@@ -12,7 +12,7 @@ def storeSubtitleInfo(videos, subtitles, storage_type):
     """
     stores information about downloaded subtitles in plex's Dict()
     """
-    if not "subs" in Dict:
+    if "subs" not in Dict:
         Dict["subs"] = {}
 
     storage = Dict["subs"]
@@ -20,11 +20,11 @@ def storeSubtitleInfo(videos, subtitles, storage_type):
     for video, video_subtitles in subtitles.items():
         part = videos[video]
 
-        if not video.id in storage:
+        if video.id not in storage:
             storage[video.id] = {}
 
         video_dict = storage[video.id]
-        if not part.id in video_dict:
+        if part.id not in video_dict:
             video_dict[part.id] = {}
 
         part_dict = video_dict[part.id]
