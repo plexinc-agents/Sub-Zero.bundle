@@ -325,16 +325,28 @@ def ItemDetailsMenu(rating_key, title=None, base_title=None, item_title=None, ca
 
                 # iterate through all configured languages
                 for lang_short in config.langList:
+                    sub_data_for_lang = sub_part_data.get(lang_short, {})
 
                     # try getting current subtitle information for that language
-                    current_subtitle_data = sub_part_data.get(lang_short, {}).get("current", (None, None))
-                    current_sub_provider_name, current_sub_id = current_subtitle_data
-                    summary = "No current subtitle"
-                    if current_sub_provider_name:
-                        current_subtitle = sub_part_data[lang_short][current_subtitle_data]
+                    current_subtitle_key = sub_data_for_lang.get("current", (None, None))
+                    current_sub_provider_name, current_sub_id = current_subtitle_key
 
-                        summary = "Current subtitle: %s (added: %s), Language: %s, Score: %i, Storage: %s, From: %s" % \
-                                  (current_sub_provider_name, current_subtitle["date_added"].strftime("%Y-%m-%d %H:%M:%S"), lang_short,
+                    legacy_storage = False
+
+                    # old storage version; take newest subtitle as current
+                    if not current_sub_provider_name:
+                        current_subtitle_key = \
+                            sorted([(sub["date_added"], key) for key, sub in sub_data_for_lang.iteritems()], None, None, True)[0][1]
+                        current_sub_provider_name, current_sub_id = current_subtitle_key
+                        legacy_storage = True
+
+                    summary = u"No current subtitle in storage"
+                    if current_sub_provider_name:
+                        current_subtitle = sub_part_data[lang_short][current_subtitle_key]
+
+                        summary = u"Current subtitle%s: %s (added: %s), Language: %s, Score: %i, Storage: %s, From: %s" % \
+                                  (u" (legacy/inaccurate)" if legacy_storage else "", current_sub_provider_name,
+                                   current_subtitle["date_added"].strftime("%Y-%m-%d %H:%M:%S"), lang_short,
                                    current_subtitle["score"], current_subtitle["storage"], current_subtitle["link"])
 
                     oc.add(DirectoryObject(
