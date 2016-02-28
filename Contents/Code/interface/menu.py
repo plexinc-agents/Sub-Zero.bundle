@@ -312,23 +312,26 @@ def ItemDetailsMenu(rating_key, title=None, base_title=None, item_title=None, ca
     ))
     current_subtitle_info = getSubtitleInfo(rating_key)
     if current_subtitle_info:
-        parts = current_subtitle_info.iteritems()
-        single = len(current_subtitle_info) == 1
-        for part, data in parts:
-            for lang_short in config.langList:
-                current_subtitle_key = data.get(lang_short, {}).get("current")
-                if current_subtitle_key:
-                    current_subtitle = data[lang_short][current_subtitle_key]
+        media = list(Plex["library"].metadata(rating_key))[0].media
+        for part in media.parts:
+            sub_part_data = current_subtitle_info.get(str(part.id))
+            if sub_part_data:
+                for lang_short in config.langList:
+                    current_subtitle_data = sub_part_data.get(lang_short, (None, None)).get("current")
+                    current_sub_provider_name, current_sub_id = current_subtitle_data
+                    summary = "No current subtitle"
+                    if current_sub_provider_name:
+                        current_subtitle = sub_part_data[lang_short][current_subtitle_data]
+
+                        summary = "Current subtitle: %s (added: %s), Language: %s, Score: %i, Storage: %s, From: %s" % \
+                                  (current_sub_provider_name, current_subtitle["date_added"].strftime("%Y-%m-%d %H:%M:%S"), lang_short,
+                                   current_subtitle["score"], current_subtitle["storage"], current_subtitle["link"])
 
                     oc.add(DirectoryObject(
                         key=Callback(RefreshItem, rating_key=rating_key, item_title=item_title),
-                        title=u"%sCurrent subtitle: %s, "
-                              u"Language: %s, Score: %i" % (("Part %i, " % part) if not single else "",
-                                                            current_subtitle_key[0], lang_short, current_subtitle["score"]),
-                        summary="Storage: %s, \nFrom: %s" % (current_subtitle["storage"], current_subtitle["link"])
+                        title=u"Manually list subtitles of: %s" % os.path.basename(part.file),
+                        summary=summary
                     ))
-                else:
-                    print "no current subtitle"
 
     add_ignore_options(oc, "videos", title=item_title, rating_key=rating_key, callback_menu=IgnoreMenu)
 
