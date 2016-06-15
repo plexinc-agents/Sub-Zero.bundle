@@ -5,10 +5,10 @@ import config
 import helpers
 import subtitlehelpers
 
-from subzero.lib.io import getViableEncoding
+from config import config as sz_config
 
 
-def findSubtitles(part):
+def find_subtitles(part):
     lang_sub_map = {}
     part_filename = helpers.unicodize(part.file)
     part_basename = os.path.splitext(os.path.basename(part_filename))[0]
@@ -54,14 +54,14 @@ def findSubtitles(part):
     total_media_files = 0
     for path in paths:
         path = helpers.unicodize(path)
-        for file_path_listing in os.listdir(path):
+        for file_path_listing in os.listdir(path.encode(sz_config.fs_encoding)):
 
             # When using os.listdir with a unicode path, it will always return a string using the
             # NFD form. However, we internally are using the form NFC and therefore need to convert
             # it to allow correct regex / comparisons to be performed.
             #
             file_path_listing = helpers.unicodize(file_path_listing)
-            if os.path.isfile(os.path.join(path, file_path_listing).encode(getViableEncoding())):
+            if os.path.isfile(os.path.join(path, file_path_listing).encode(sz_config.fs_encoding)):
                 file_paths[file_path_listing.lower()] = os.path.join(path, file_path_listing)
 
             # If we've found an actual media file, we should record it.
@@ -90,7 +90,7 @@ def findSubtitles(part):
         if total_media_files > 1 and not filename_matches_part:
             continue
 
-        subtitle_helper = subtitlehelpers.SubtitleHelpers(file_path)
+        subtitle_helper = subtitlehelpers.subtitle_helpers(file_path)
         if subtitle_helper != None:
             local_lang_map = subtitle_helper.process_subtitles(part)
             for new_language, subtitles in local_lang_map.items():
@@ -104,7 +104,7 @@ def findSubtitles(part):
 
     # add known metadata subs to our sub list
     if not use_filesystem:
-        for language, sub_list in subtitlehelpers.getSubtitlesFromMetadata(part).iteritems():
+        for language, sub_list in subtitlehelpers.get_subtitles_from_metadata(part).iteritems():
             if sub_list:
                 if language not in lang_sub_map:
                     lang_sub_map[language] = []

@@ -3,11 +3,10 @@
 import os
 import re
 import inspect
-
 from babelfish import Language
-from subzero.lib.io import FileIO
-from subzero.constants import PLUGIN_NAME
-from lib import configure_plex, Plex
+from subzero.lib.io import FileIO, get_viable_encoding
+from subzero.constants import PLUGIN_NAME, PLUGIN_IDENTIFIER, MOVIE, SHOW
+from lib import Plex
 from helpers import check_write_permissions
 
 SUBTITLE_EXTS = ['utf', 'utf8', 'utf-8', 'srt', 'smi', 'rt', 'ssa', 'aqt', 'jss', 'ass', 'idx', 'sub', 'txt', 'psb']
@@ -30,65 +29,70 @@ def int_or_default(s, default):
 
 class Config(object):
     version = None
-    langList = None
-    subtitleDestinationFolder = None
+    full_version = None
+    lang_list = None
+    subtitle_destination_folder = None
     providers = None
-    providerSettings = None
+    provider_settings = None
     max_recent_items_per_library = 200
-    plex_api_working = False
     permissions_ok = False
     missing_permissions = None
+    ignore_paths = None
+    fs_encoding = None
+    notify_executable = None
+    sections = None
+    enabled_sections = None
 
     initialized = False
 
     def initialize(self):
-        self.version = self.getVersion()
+        self.fs_encoding = get_viable_encoding()
+        self.version = self.get_version()
         self.full_version = u"%s %s" % (PLUGIN_NAME, self.version)
-        self.langList = self.getLangList()
-        self.subtitleDestinationFolder = self.getSubtitleDestinationFolder()
-        self.providers = self.getProviders()
-        self.providerSettings = self.getProviderSettings()
+        self.lang_list = self.get_lang_list()
+        self.subtitle_destination_folder = self.get_subtitle_destination_folder()
+        self.providers = self.get_providers()
+        self.provider_settings = self.get_provider_settings()
         self.max_recent_items_per_library = int_or_default(Prefs["scheduler.max_recent_items_per_library"], 200)
-        self.initialized = True
-        configure_plex()
-        self.plex_api_working = self.checkPlexAPI()
+        self.sections = list(Plex["library"].sections())
         self.missing_permissions = []
-        self.permissions_ok = self.checkPermissions()
+        self.ignore_paths = self.parse_ignore_paths()
+        self.permissions_ok = self.check_permissions()
+        self.notify_executable = self.check_notify_executable()
+        self.enabled_sections = self.check_enabled_sections()
+        self.initialized = True
 
-    def checkPlexAPI(self):
-        return bool(Plex["library"].sections())
-
-    def checkPermissions(self):
+    def check_permissions(self):
         if not Prefs["subtitles.save.filesystem"] or not Prefs["check_permissions"]:
             return True
 
-        if not self.plex_api_working:
-            return
-
         use_ignore_fs = Prefs["subtitles.ignore_fs"]
-        sections = Plex["library"].sections()
         all_permissions_ok = True
-        for section in list(sections):
+        for section in self.sections:
             title = section.title
             for location in section:
+                path_str = location.path
+                if isinstance(path_str, unicode):
+                    path_str = path_str.encode(self.fs_encoding)
+
                 if use_ignore_fs:
-                    ignore = False
                     # check whether we've got an ignore file inside the section path
-                    for ifn in IGNORE_FN:
-                        if os.path.isfile(os.path.join(location.path, ifn)):
-                            ignore = True
-                    if ignore:
+                    if self.is_physically_ignored(path_str):
                         continue
 
+                if self.is_path_ignored(path_str):
+                    # is the path in our ignored paths setting?
+                    continue
+
                 # section not ignored, check for write permissions
-                if not check_write_permissions(location.path):
+                if not check_write_permissions(path_str):
                     # not enough permissions
                     self.missing_permissions.append((title, location.path))
                     all_permissions_ok = False
 
         return all_permissions_ok
 
-    def getVersion(self):
+    def get_version(self):
         curDir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
         info_file_path = os.path.abspath(os.path.join(curDir, "..", "..", "Info.plist"))
         data = FileIO.read(info_file_path)
@@ -96,13 +100,71 @@ class Config(object):
         if result:
             return result.group(1)
 
-    def getBlacklist(self, key):
-        return map(lambda id: id.strip(), (Prefs[key] or "").split(","))
+    def parse_ignore_paths(self):
+        paths = Prefs["subtitles.ignore_paths"]
+        if paths:
+            try:
+                return [path.strip() for path in paths.split(",")]
+            except:
+                Log.Error("Couldn't parse your ignore paths settings: %s" % paths)
+        return []
+
+    def is_physically_ignored(self, folder):
+        # check whether we've got an ignore file inside the path
+        for ifn in IGNORE_FN:
+            if os.path.isfile(os.path.join(folder, ifn)):
+                Log.Info(u'Ignoring "%s" because "%s" exists', folder, ifn)
+                return True
+
+        return False
+
+    def is_path_ignored(self, fn):
+        for path in self.ignore_paths:
+            if fn.startswith(path):
+                return True
+        return False
+
+    def check_notify_executable(self):
+        fn = Prefs["notify_executable"]
+        if not fn:
+            return
+
+        splitted_fn = fn.split()
+        exe_fn = splitted_fn[0]
+        arguments = [arg.strip() for arg in splitted_fn[1:]]
+
+        if os.path.isfile(exe_fn) and os.access(exe_fn, os.X_OK):
+            return exe_fn, arguments
+        Log.Error("Notify executable not existing or not executable: %s" % exe_fn)
+
+    def check_enabled_sections(self):
+        enabled_for_primary_agents = []
+        enabled_sections = {}
+
+        # find which agents we're enabled for
+        for agent in Plex.agents():
+            if not agent.primary:
+                continue
+
+            for t in list(agent.media_types):
+                if t.media_type in (MOVIE, SHOW):
+                    related_agents = Plex.primary_agent(agent.identifier, t.media_type)
+                    for a in related_agents:
+                        if a.identifier == PLUGIN_IDENTIFIER and a.enabled:
+                            enabled_for_primary_agents.append(agent.identifier)
+
+        # find the libraries that use them
+        for library in self.sections:
+            if library.agent in enabled_for_primary_agents:
+                enabled_sections[library.key] = library
+
+        Log.Debug(u"I'm enabled for: %s" % [lib.title for key, lib in enabled_sections.iteritems()])
+        return enabled_sections
 
     # Prepare a list of languages we want subs for
-    def getLangList(self):
+    def get_lang_list(self):
         l = {Language.fromietf(Prefs["langPref1"])}
-        langCustom = Prefs["langPrefCustom"].strip()
+        lang_custom = Prefs["langPrefCustom"].strip()
 
         if Prefs['subtitles.only_one']:
             return l
@@ -113,8 +175,8 @@ class Config(object):
         if Prefs["langPref3"] != "None":
             l.update({Language.fromietf(Prefs["langPref3"])})
 
-        if len(langCustom) and langCustom != "None":
-            for lang in langCustom.split(u","):
+        if len(lang_custom) and lang_custom != "None":
+            for lang in lang_custom.split(u","):
                 lang = lang.strip()
                 try:
                     real_lang = Language.fromietf(lang)
@@ -127,14 +189,14 @@ class Config(object):
 
         return l
 
-    def getSubtitleDestinationFolder(self):
+    def get_subtitle_destination_folder(self):
         if not Prefs["subtitles.save.filesystem"]:
             return
 
         fld_custom = Prefs["subtitles.save.subFolder.Custom"].strip() if bool(Prefs["subtitles.save.subFolder.Custom"]) else None
         return fld_custom or (Prefs["subtitles.save.subFolder"] if Prefs["subtitles.save.subFolder"] != "current folder" else None)
 
-    def getProviders(self):
+    def get_providers(self):
         providers = {'opensubtitles': Prefs['provider.opensubtitles.enabled'],
                      #'thesubdb': Prefs['provider.thesubdb.enabled'],
                      'podnapisi': Prefs['provider.podnapisi.enabled'],
@@ -143,7 +205,7 @@ class Config(object):
                      }
         return filter(lambda prov: providers[prov], providers)
 
-    def getProviderSettings(self):
+    def get_provider_settings(self):
         provider_settings = {'addic7ed': {'username': Prefs['provider.addic7ed.username'],
                                           'password': Prefs['provider.addic7ed.password'],
                                           'use_random_agents': Prefs['provider.addic7ed.use_random_agents'],

@@ -3,7 +3,7 @@ import os
 import logging
 from bs4 import UnicodeDammit
 from subliminal.api import get_subtitle_path, io
-from subzero.lib.io import getViableEncoding
+from subzero.lib.io import get_viable_encoding
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,8 @@ def save_subtitles(video, subtitles, single=False, directory=None, encoding=None
 
         # force unicode
         subtitle_path = UnicodeDammit(subtitle_path).unicode_markup
+
+        subtitle.storage_path = subtitle_path
 
         # save content as is or in the specified encoding
         logger.info('Saving %r to %r', subtitle, subtitle_path)

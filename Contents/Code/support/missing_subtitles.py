@@ -1,17 +1,17 @@
 # coding=utf-8
 import traceback
+
 from support.config import config
 from support.helpers import format_item
-from lib import Plex
+from support.items import get_item
+from support.lib import Plex
 
 
-def itemDiscoverMissing(rating_key, kind="show", added_at=None, section_title=None, internal=False, external=True, languages=()):
+def item_discover_missing_subs(rating_key, kind="show", added_at=None, section_title=None, internal=False, external=True, languages=()):
     existing_subs = {"internal": [], "external": [], "count": 0}
 
     item_id = int(rating_key)
-    item_container = Plex["library"].metadata(item_id)
-
-    item = list(item_container)[0]
+    item = get_item(rating_key)
 
     if kind == "show":
         item_title = format_item(item, kind, parent=item.season, section_title=section_title, parent_title=item.show.title)
@@ -44,19 +44,19 @@ def itemDiscoverMissing(rating_key, kind="show", added_at=None, section_title=No
         Log.Info(u"Subs still missing for '%s': %s", item_title, missing)
 
     if missing:
-        return added_at, item_id, item_title
+        return added_at, item_id, item_title, item
 
 
-def getAllMissing(items):
+def items_get_all_missing_subs(items):
     missing = []
     for added_at, kind, section_title, key in items:
         try:
-            state = itemDiscoverMissing(
+            state = item_discover_missing_subs(
                 key,
                 kind=kind,
                 added_at=added_at,
                 section_title=section_title,
-                languages=config.langList,
+                languages=config.lang_list,
                 internal=bool(Prefs["subtitles.scan.embedded"]),
                 external=bool(Prefs["subtitles.scan.external"])
             )

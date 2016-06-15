@@ -1,6 +1,6 @@
 # coding=utf-8
 
-import re, unicodedata, os
+import re, os
 import config
 import helpers
 
@@ -12,7 +12,7 @@ class SubtitleHelper(object):
         self.filename = filename
 
 
-def SubtitleHelpers(filename):
+def subtitle_helpers(filename):
     filename = helpers.unicodize(filename)
     for cls in [VobSubSubtitleHelper, DefaultSubtitleHelper]:
         if cls.is_helper_for(filename):
@@ -137,7 +137,7 @@ class DefaultSubtitleHelper(SubtitleHelper):
         return lang_sub_map
 
 
-def getSubtitlesFromMetadata(part):
+def get_subtitles_from_metadata(part):
     subs = {}
     for language in part.subtitles:
         subs[language] = []

@@ -3,6 +3,8 @@
 import logging
 
 import chardet
+import pysrt
+import pysubs2
 from bs4 import UnicodeDammit
 from subliminal.video import Episode, Movie
 from subliminal import Subtitle
@@ -65,6 +67,8 @@ def compute_score(matches, video, scores=None):
 
 
 class PatchedSubtitle(Subtitle):
+    storage_path = None
+
     def guess_encoding(self):
         """Guess encoding using the language, falling back on chardet.
 
@@ -88,10 +92,15 @@ class PatchedSubtitle(Subtitle):
             encodings.append('windows-1255')
         elif self.language.alpha3 == 'tur':
             encodings.extend(['iso-8859-9', 'windows-1254'])
-        elif self.language.alpha3 == 'pol':
+
+        # Polish, Czech, Slovak, Hungarian, Slovene, Bosnian, Croatian, Serbian (Latin script),
+        # Romanian (before 1993 spelling reform) and Albanian
+        elif self.language.alpha3 in ('pol', 'cze', 'svk', 'hun', 'svn', 'bih', 'hrv', 'srb', 'rou', 'alb'):
             # Eastern European Group 1
             encodings.extend(['windows-1250'])
-        elif self.language.alpha3 == 'bul':
+
+        # Bulgarian, Serbian and Macedonian
+        elif self.language.alpha3 in ('bul', 'srb', 'mkd'):
             # Eastern European Group 2
             encodings.extend(['windows-1251'])
         else:
@@ -127,3 +136,32 @@ class PatchedSubtitle(Subtitle):
             raise ValueError(u"Couldn't guess the proper encoding for %s" % self)
 
         return encoding
+
+    def is_valid(self):
+        """Check if a :attr:`text` is a valid SubRip format.
+
+        :return: whether or not the subtitle is valid.
+        :rtype: bool
+
+        """
+        if not self.text:
+            return False
+
+        # valid srt
+        try:
+            pysrt.from_string(self.text, error_handling=pysrt.ERROR_RAISE)
+        except Exception, e:
+            logger.error("PySRT-parsing failed: %s, trying pysubs2", e)
+        else:
+            return True
+
+        # something else, try to return srt
+        try:
+            logger.debug("Trying parsing with PySubs2")
+            subs = pysubs2.SSAFile.from_string(self.text)
+            self.content = subs.to_string("srt")
+        except:
+            logger.exception("Couldn't convert subtitle %s to .srt format", self)
+            return False
+
+        return True

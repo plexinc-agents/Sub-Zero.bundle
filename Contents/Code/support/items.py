@@ -3,17 +3,39 @@
 import logging
 import re
 import types
+import os
 from ignore import ignore_list
 from helpers import is_recent, format_item, query_plex
 from subzero import intent
 from lib import Plex
-from config import config
+from config import config, IGNORE_FN
 
 logger = logging.getLogger(__name__)
 
 MI_KIND, MI_TITLE, MI_KEY, MI_DEEPER, MI_ITEM = 0, 1, 2, 3, 4
 
 container_size_re = re.compile(ur'totalSize="(\d+)"')
+
+
+def get_item(key):
+    item_id = int(key)
+    item_container = Plex["library"].metadata(item_id)
+
+    item = list(item_container)[0]
+    return item
+
+
+def get_item_kind(item):
+    return type(item).__name__
+
+
+def get_item_thumb(item):
+    kind = get_item_kind(item)
+    if kind == "Episode":
+        return item.show.thumb
+    elif kind == "Section":
+        return item.art
+    return item.thumb
 
 
 def get_items_info(items):
@@ -24,7 +46,7 @@ def get_kind(items):
     return items[0][MI_KIND]
 
 
-def getSectionSize(key):
+def get_section_size(key):
     """
     quick query to determine the section size
     :param key:
@@ -44,7 +66,7 @@ def getSectionSize(key):
     return size
 
 
-def getItems(key="recently_added", base="library", value=None, flat=False, add_section_title=False):
+def get_items(key="recently_added", base="library", value=None, flat=False, add_section_title=False):
     """
     try to handle all return types plex throws at us and return a generalized item tuple
     """
@@ -66,6 +88,17 @@ def getItems(key="recently_added", base="library", value=None, flat=False, add_s
         else:
             kind = item.type
 
+        # only return items for our enabled sections
+        section_key = None
+        if kind == "section":
+            section_key = item.key
+        else:
+            if hasattr(item, "section_key"):
+                section_key = getattr(item, "section_key")
+
+        if section_key and section_key not in config.enabled_sections:
+            continue
+
         if kind == "season":
             # fixme: i think this case is unused now
             if flat:
@@ -81,8 +114,9 @@ def getItems(key="recently_added", base="library", value=None, flat=False, add_s
             items.append(("directory", item.title, item.key, True, item))
 
         elif kind == "section":
-            item.size = getSectionSize(item.key)
-            items.append(("section", item.title, int(item.key), True, item))
+            if item.type in ['movie', 'show']:
+                item.size = get_section_size(item.key)
+                items.append(("section", item.title, int(item.key), True, item))
 
         elif kind == "episode":
             items.append(
@@ -101,12 +135,12 @@ def getItems(key="recently_added", base="library", value=None, flat=False, add_s
     return items
 
 
-def getRecentlyAddedItems():
-    items = getItems(key="recently_added")
+def get_recently_added_items():
+    items = get_items(key="recently_added")
     return filter(lambda x: is_recent(x[MI_ITEM].added_at), items)
 
 
-def getRecentItems():
+def get_recent_items():
     """
     actually get the recent items, not limited like /library/recentlyAdded
     :return:
@@ -128,7 +162,9 @@ def getRecentItems():
     recent = []
 
     for section in Plex["library"].sections():
-        if section.type not in ("movie", "show") or section.key in ignore_list.sections:
+        if section.type not in ("movie", "show") \
+                or section.key not in config.enabled_sections \
+                or section.key in ignore_list.sections:
             Log.Debug(u"Skipping section: %s" % section.title)
             continue
 
@@ -155,17 +191,69 @@ def getRecentItems():
     return recent
 
 
-def getOnDeckItems():
-    return getItems(key="on_deck", add_section_title=True)
+def get_on_deck_items():
+    return get_items(key="on_deck", add_section_title=True)
 
 
-def getAllItems(key, base="library", value=None, flat=False):
-    return getItems(key, base=base, value=value, flat=flat)
+def get_all_items(key, base="library", value=None, flat=False):
+    return get_items(key, base=base, value=value, flat=flat)
 
 
-def refreshItem(rating_key, force=False, timeout=8000):
+def is_ignored(rating_key, item=None):
+    """
+    check whether an item, its show/season/section is in the soft or the hard ignore list
+    :param rating_key:
+    :param item:
+    :return:
+    """
+    # item in soft ignore list
+    if rating_key in ignore_list["videos"]:
+        Log.Debug("Item %s is in the soft ignore list" % rating_key)
+        return True
+
+    item = item or get_item(rating_key)
+    kind = get_item_kind(item)
+
+    # show in soft ignore list
+    if kind == "Episode" and item.show.rating_key in ignore_list["series"]:
+        Log.Debug("Item %s's show is in the soft ignore list" % rating_key)
+        return True
+
+    # section in soft ignore list
+    if item.section.key in ignore_list["sections"]:
+        Log.Debug("Item %s's section is in the soft ignore list" % rating_key)
+        return True
+
+    # physical/path ignore
+    if Prefs["subtitles.ignore_fs"] or config.ignore_paths:
+        # normally check current item folder and the library
+        check_ignore_paths = [".", "../"]
+        if kind == "Episode":
+            # series/episode, we've got a season folder here, also
+            check_ignore_paths.append("../../")
+
+        for part in item.media.parts:
+            if config.ignore_paths and config.is_path_ignored(part.file):
+                Log.Debug("Item %s's path is manually ignored" % rating_key)
+                return True
+
+            if Prefs["subtitles.ignore_fs"]:
+                for sub_path in check_ignore_paths:
+                    if config.is_physically_ignored(os.path.abspath(os.path.join(os.path.dirname(part.file), sub_path))):
+                        Log.Debug("An ignore file exists in either the items or its parent folders")
+                        return True
+
+    return False
+
+
+def refresh_item(rating_key, force=False, timeout=8000, refresh_kind=None, parent_rating_key=None):
     # timeout actually is the time for which the intent will be valid
     if force:
         intent.set("force", rating_key, timeout=timeout)
+
+    if refresh_kind == "episode":
+        # season refresh
+        rating_key = parent_rating_key
+
     Log.Info("%s item %s", "Refreshing" if not force else "Forced-refreshing", rating_key)
     Plex["library/metadata"].refresh(rating_key)

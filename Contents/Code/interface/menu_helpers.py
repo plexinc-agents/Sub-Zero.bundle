@@ -1,10 +1,14 @@
 # coding=utf-8
 import types
 
-from support.items import get_kind
+from support.items import get_kind, get_item_thumb
 from subzero import intent
 from support.helpers import format_video
 from support.ignore import ignore_list
+from subzero.constants import ICON
+from subzero.func import debouncer
+
+default_thumb = R(ICON)
 
 
 def should_display_ignore(items, previous=None):
@@ -42,8 +46,11 @@ def add_ignore_options(oc, kind, callback_menu=None, title=None, rating_key=None
     )
 
 
-def dig_tree(oc, items, menu_callback, menu_determination_callback=None, force_rating_key=None, fill_args=None, pass_kwargs=None):
+def dig_tree(oc, items, menu_callback, menu_determination_callback=None, force_rating_key=None, fill_args=None, pass_kwargs=None,
+             thumb=default_thumb):
     for kind, title, key, dig_deeper, item in items:
+        thumb = get_item_thumb(item) or thumb
+
         add_kwargs = {}
         if fill_args:
             add_kwargs = dict((name, getattr(item, k)) for k, name in fill_args.iteritems() if item and hasattr(item, k))
@@ -53,7 +60,7 @@ def dig_tree(oc, items, menu_callback, menu_determination_callback=None, force_r
         oc.add(DirectoryObject(
             key=Callback(menu_callback or menu_determination_callback(kind, item), title=title, rating_key=force_rating_key or key,
                          **add_kwargs),
-            title=title
+            title=title, thumb=thumb
         ))
     return oc
 
@@ -111,5 +118,23 @@ def enable_channel_wrapper(func):
     def wrap(*args, **kwargs):
         enforce_route = kwargs.pop("enforce_route", None)
         return (func if Prefs["enable_channel"] or enforce_route else noop)(*args, **kwargs)
+
+    return wrap
+
+
+def debounce(func):
+    """
+    prevent func from being called twice with the same arguments
+    :param func:
+    :return:
+    """
+    def wrap(*args, **kwargs):
+        if "randomize" in kwargs:
+            if ([func] + list(args), kwargs) in debouncer:
+                kwargs["trigger"] = False
+                Log.Debug("not triggering %s twice with %s, %s" % (func, args, kwargs))
+            else:
+                debouncer.add([func] + list(args), kwargs)
+        return func(*args, **kwargs)
 
     return wrap
