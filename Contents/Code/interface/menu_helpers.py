@@ -58,8 +58,8 @@ def dig_tree(oc, items, menu_callback, menu_determination_callback=None, force_r
             add_kwargs.update(pass_kwargs)
 
         oc.add(DirectoryObject(
-            key=Callback(menu_callback or menu_determination_callback(kind, item), title=title, rating_key=force_rating_key or key,
-                         **add_kwargs),
+            key=Callback(menu_callback or menu_determination_callback(kind, item), title=title,
+                         rating_key=force_rating_key or key, **add_kwargs),
             title=title, thumb=thumb
         ))
     return oc
@@ -131,10 +131,25 @@ def debounce(func):
     def wrap(*args, **kwargs):
         if "randomize" in kwargs:
             if ([func] + list(args), kwargs) in debouncer:
-                kwargs["trigger"] = False
                 Log.Debug("not triggering %s twice with %s, %s" % (func, args, kwargs))
+                return ObjectContainer()
             else:
                 debouncer.add([func] + list(args), kwargs)
         return func(*args, **kwargs)
 
     return wrap
+
+
+class SZObjectContainer(ObjectContainer):
+    def __init__(self, *args, **kwargs):
+        super(SZObjectContainer, self).__init__(*args, **kwargs)
+        from interface.menu import fatality
+        from support.helpers import pad_title, timestamp
+        self.add(DirectoryObject(
+            key=Callback(fatality, force_title=" ", randomize=timestamp()),
+            title=pad_title("<< Back to home"),
+            summary="Current state: %s; Last state: %s" % (
+                (Dict["current_refresh_state"] or "Idle") if "current_refresh_state" in Dict else "Idle",
+                (Dict["last_refresh_state"] or "None") if "last_refresh_state" in Dict else "None"
+            )
+        ))

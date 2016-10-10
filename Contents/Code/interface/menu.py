@@ -1,19 +1,26 @@
 # coding=utf-8
 import logging
+
+import operator
+
 import logger
+import os
+import traceback
+import subliminal
+import subliminal_patch
 
 from menu_helpers import add_ignore_options, dig_tree, set_refresh_menu_state, \
-    should_display_ignore, enable_channel_wrapper, default_thumb, debounce
+    should_display_ignore, enable_channel_wrapper, default_thumb, debounce, SZObjectContainer
 from subzero.constants import TITLE, ART, ICON, PREFIX, PLUGIN_IDENTIFIER, DEPENDENCY_MODULE_NAMES
 from support.background import scheduler
 from support.config import config
 from support.helpers import pad_title, timestamp
 from support.ignore import ignore_list
-from support.items import get_item, get_on_deck_items, refresh_item, get_all_items, get_recent_items, get_items_info, get_item_thumb
+from support.items import get_item, get_on_deck_items, refresh_item, get_all_items, get_recent_items, get_items_info, \
+    get_item_thumb, get_item_kind_from_rating_key
 from support.lib import Plex
 from support.missing_subtitles import items_get_all_missing_subs
-from support.storage import reset_storage, log_storage, get_subtitle_info
-from support.plex_media import scan_parts
+from support.storage import reset_storage, log_storage
 
 # init GUI
 ObjectContainer.art = R(ART)
@@ -35,9 +42,15 @@ def fatality(randomize=None, force_title=None, header=None, message=None, only_r
     """
     subzero main menu
     """
-    title = force_title if force_title is not None else config.full_version
-    oc = ObjectContainer(title1=title, title2=None, header=unicode(header) if header else header, message=message, no_history=no_history,
+    title = config.full_version#force_title if force_title is not None else config.full_version
+    oc = ObjectContainer(title1=title, title2=title, header=unicode(header) if header else title, message=message, no_history=no_history,
                          replace_parent=replace_parent, no_cache=True)
+
+    # always re-check permissions
+    config.refresh_permissions_status()
+
+    # always re-check enabled sections
+    config.refresh_enabled_sections()
 
     if not config.permissions_ok and config.missing_permissions:
         for title, path in config.missing_permissions:
@@ -46,6 +59,14 @@ def fatality(randomize=None, force_title=None, header=None, message=None, only_r
                 title=pad_title("Insufficient permissions"),
                 summary="Insufficient permissions on library %s, folder: %s" % (title, path),
             ))
+        return oc
+
+    if not config.enabled_sections:
+        oc.add(DirectoryObject(
+            key=Callback(fatality, randomize=timestamp()),
+            title=pad_title("I'm not enabled!"),
+            summary="Please enable me for some of your libraries in your server settings; currently I do nothing",
+        ))
         return oc
 
     if not only_refresh:
@@ -65,7 +86,7 @@ def fatality(randomize=None, force_title=None, header=None, message=None, only_r
             summary="Shows the current on deck items and allows you to individually (force-) refresh their metadata/subtitles."
         ))
         oc.add(DirectoryObject(
-            key=Callback(RecentlyAddedMenu),
+            key=Callback(RecentlyAddedMenu, randomize=timestamp()),
             title="Items with missing subtitles",
             summary="Shows the items honoring the configured 'Item age to be considered recent'-setting (%s)"
                     " and allowing you to individually (force-) refresh their metadata/subtitles. " % Prefs["scheduler.item_is_recent_age"]
@@ -129,7 +150,8 @@ def OnDeckMenu(message=None):
 
 
 @route(PREFIX + '/recent')
-def RecentlyAddedMenu(message=None):
+@debounce
+def RecentlyAddedMenu(message=None, randomize=None):
     """
     displays the recently added items with missing subtitles
     :param message:
@@ -139,7 +161,7 @@ def RecentlyAddedMenu(message=None):
 
 
 def recentItemsMenu(title, base_title=None):
-    oc = ObjectContainer(title2=title, no_cache=True, no_history=True)
+    oc = SZObjectContainer(title2=title, no_cache=True, no_history=True)
     recent_items = get_recent_items()
     if recent_items:
         missing_items = items_get_all_missing_subs(recent_items)
@@ -165,7 +187,7 @@ def mergedItemsMenu(title, itemGetter, itemGetterKwArgs=None, base_title=None, *
     :param kwargs:
     :return:
     """
-    oc = ObjectContainer(title2=title, no_cache=True, no_history=True)
+    oc = SZObjectContainer(title2=title, no_cache=True, no_history=True)
     items = itemGetter(*args, **kwargs)
 
     for kind, title, item_id, deeper, item in items:
@@ -203,7 +225,7 @@ def IgnoreMenu(kind, rating_key, title=None, sure=False, todo="not_set"):
     """
     is_ignored = rating_key in ignore_list[kind]
     if not sure:
-        oc = ObjectContainer(no_history=True, replace_parent=True, title1="%s %s %s %s the ignore list" % (
+        oc = SZObjectContainer(no_history=True, replace_parent=True, title1="%s %s %s %s the ignore list" % (
             "Add" if not is_ignored else "Remove", ignore_list.verbose(kind), title, "to" if not is_ignored else "from"), title2="Are you sure?")
         oc.add(DirectoryObject(
             key=Callback(IgnoreMenu, kind=kind, rating_key=rating_key, title=title, sure=True, todo="add" if not is_ignored else "remove"),
@@ -248,7 +270,7 @@ def SectionsMenu():
     """
     items = get_all_items("sections")
 
-    return dig_tree(ObjectContainer(title2="Sections", no_cache=True, no_history=True), items, None,
+    return dig_tree(SZObjectContainer(title2="Sections", no_cache=True, no_history=True), items, None,
                     menu_determination_callback=determine_section_display, pass_kwargs={"base_title": "Sections"},
                     fill_args={"title": "section_title"})
 
@@ -271,7 +293,7 @@ def SectionMenu(rating_key, title=None, base_title=None, section_title=None, ign
 
     section_title = title
     title = base_title + " > " + title
-    oc = ObjectContainer(title2=title, no_cache=True, no_history=True)
+    oc = SZObjectContainer(title2=title, no_cache=True, no_history=True)
     if ignore_options:
         add_ignore_options(oc, "sections", title=section_title, rating_key=rating_key, callback_menu=IgnoreMenu)
 
@@ -295,7 +317,7 @@ def SectionFirstLetterMenu(rating_key, title=None, base_title=None, section_titl
     kind, deeper = get_items_info(items)
 
     title = unicode(title)
-    oc = ObjectContainer(title2=section_title, no_cache=True, no_history=True)
+    oc = SZObjectContainer(title2=section_title, no_cache=True, no_history=True)
     title = base_title + " > " + title
     add_ignore_options(oc, "sections", title=section_title, rating_key=rating_key, callback_menu=IgnoreMenu)
 
@@ -320,7 +342,7 @@ def FirstLetterMetadataMenu(rating_key, key, title=None, base_title=None, displa
     :return:
     """
     title = base_title + " > " + unicode(title)
-    oc = ObjectContainer(title2=title, no_cache=True, no_history=True)
+    oc = SZObjectContainer(title2=title, no_cache=True, no_history=True)
 
     items = get_all_items(key="first_character", value=[rating_key, key], base="library/sections", flat=False)
     kind, deeper = get_items_info(items)
@@ -330,7 +352,8 @@ def FirstLetterMetadataMenu(rating_key, key, title=None, base_title=None, displa
 
 
 @route(PREFIX + '/section/contents', display_items=bool)
-def MetadataMenu(rating_key, title=None, base_title=None, display_items=False, previous_item_type=None, previous_rating_key=None):
+def MetadataMenu(rating_key, title=None, base_title=None, display_items=False, previous_item_type=None,
+                 previous_rating_key=None):
     """
     displays the contents of a section based on whether it has a deeper tree or not (movies->movie (item) list; series->series list)
     :param rating_key:
@@ -344,7 +367,9 @@ def MetadataMenu(rating_key, title=None, base_title=None, display_items=False, p
     title = unicode(title)
     item_title = title
     title = base_title + " > " + title
-    oc = ObjectContainer(title2=title, no_cache=True, no_history=True)
+    oc = SZObjectContainer(title2=title, no_cache=True, no_history=True)
+
+    current_kind = get_item_kind_from_rating_key(rating_key)
 
     if display_items:
         items = get_all_items(key="children", value=rating_key, base="library/metadata")
@@ -355,16 +380,22 @@ def MetadataMenu(rating_key, title=None, base_title=None, display_items=False, p
         if should_display_ignore(items, previous=previous_item_type):
             add_ignore_options(oc, "series", title=item_title, rating_key=rating_key, callback_menu=IgnoreMenu)
 
+        timeout = 30
+        if current_kind == "season":
+            timeout = 90
+        elif current_kind == "series":
+            timeout = 360
+
         # add refresh
         oc.add(DirectoryObject(
-            key=Callback(RefreshItem, rating_key=rating_key, item_title=item_title, refresh_kind=kind, previous_rating_key=previous_rating_key,
-                         timeout=16000, randomize=timestamp()),
+            key=Callback(RefreshItem, rating_key=rating_key, item_title=title, refresh_kind=current_kind,
+                         previous_rating_key=previous_rating_key, timeout=timeout*1000, randomize=timestamp()),
             title=u"Refresh: %s" % item_title,
             summary="Refreshes the item, possibly picking up new subtitles on disk"
         ))
         oc.add(DirectoryObject(
-            key=Callback(RefreshItem, rating_key=rating_key, item_title=item_title, force=True, refresh_kind=kind,
-                         previous_rating_key=previous_rating_key, timeout=16000),
+            key=Callback(RefreshItem, rating_key=rating_key, item_title=title, force=True,
+                         refresh_kind=current_kind, previous_rating_key=previous_rating_key, timeout=timeout*1000),
             title=u"Force-Refresh: %s" % item_title,
             summary="Issues a forced refresh, ignoring known subtitles and searching for new ones"
         ))
@@ -376,7 +407,7 @@ def MetadataMenu(rating_key, title=None, base_title=None, display_items=False, p
 
 @route(PREFIX + '/ignore_list')
 def IgnoreListMenu():
-    oc = ObjectContainer(title2="Ignore list", replace_parent=True)
+    oc = SZObjectContainer(title2="Ignore list", replace_parent=True)
     for key in ignore_list.key_order:
         values = ignore_list[key]
         for value in values:
@@ -385,6 +416,7 @@ def IgnoreListMenu():
 
 
 @route(PREFIX + '/item/{rating_key}/actions')
+@debounce
 def ItemDetailsMenu(rating_key, title=None, base_title=None, item_title=None, randomize=None):
     """
     displays the item details menu of an item that doesn't contain any deeper tree, such as a movie or an episode
@@ -398,19 +430,24 @@ def ItemDetailsMenu(rating_key, title=None, base_title=None, item_title=None, ra
     title = unicode(base_title) + " > " + unicode(title) if base_title else unicode(title)
     item = get_item(rating_key)
 
-    oc = ObjectContainer(title2=title, replace_parent=True)
+    timeout = 30
+
+    oc = SZObjectContainer(title2=title, replace_parent=True)
     oc.add(DirectoryObject(
-        key=Callback(RefreshItem, rating_key=rating_key, item_title=item_title, randomize=timestamp()),
+        key=Callback(RefreshItem, rating_key=rating_key, item_title=item_title, randomize=timestamp(),
+                     timeout=timeout*1000),
         title=u"Refresh: %s" % item_title,
         summary="Refreshes the item, possibly picking up new subtitles on disk",
         thumb=item.thumb or default_thumb
     ))
     oc.add(DirectoryObject(
-        key=Callback(RefreshItem, rating_key=rating_key, item_title=item_title, force=True, randomize=timestamp()),
+        key=Callback(RefreshItem, rating_key=rating_key, item_title=item_title, force=True, randomize=timestamp(),
+                     timeout=timeout*1000),
         title=u"Force-Refresh: %s" % item_title,
         summary="Issues a forced refresh, ignoring known subtitles and searching for new ones",
         thumb=item.thumb or default_thumb
     ))
+
     add_ignore_options(oc, "videos", title=item_title, rating_key=rating_key, callback_menu=IgnoreMenu)
 
     return oc
@@ -418,31 +455,30 @@ def ItemDetailsMenu(rating_key, title=None, base_title=None, item_title=None, ra
 
 @route(PREFIX + '/item/{rating_key}')
 @debounce
-def RefreshItem(rating_key=None, came_from="/recent", item_title=None, force=False, refresh_kind=None, previous_rating_key=None, timeout=8000, randomize=None, trigger=True):
+def RefreshItem(rating_key=None, item_title=None, force=False, refresh_kind=None,
+                previous_rating_key=None, timeout=8000, randomize=None):
     assert rating_key
-    header = " "
-    if trigger:
-        set_refresh_menu_state(u"Triggering %sRefresh for %s" % ("Force-" if force else "", item_title))
-        Thread.Create(refresh_item, rating_key=rating_key, force=force, refresh_kind=refresh_kind, parent_rating_key=previous_rating_key,
-                      timeout=int(timeout))
-        header = u"%s of item %s triggered" % ("Refresh" if not force else "Forced-refresh", rating_key)
+    set_refresh_menu_state(u"Triggering %sRefresh for %s" % ("Force-" if force else "", item_title))
+    Log.Info("Triggering %srefresh of item %s, \"%s\" (timeout: %s)", "" if not force else "force-", rating_key,
+             item_title, timeout)
+    Thread.Create(refresh_item, rating_key=rating_key, force=force, refresh_kind=refresh_kind,
+                  parent_rating_key=previous_rating_key, timeout=int(timeout))
+    header = u"%s of item %s triggered" % ("Refresh" if not force else "Forced-refresh", rating_key)
     return fatality(randomize=timestamp(), header=header, replace_parent=True)
 
 
 @route(PREFIX + '/missing/refresh')
 @debounce
-def RefreshMissing(randomize=None, trigger=True):
-    header = " "
-    if trigger:
-        Thread.CreateTimer(1.0, lambda: scheduler.run_task("searchAllRecentlyAddedMissing"))
-        header = "Refresh of recently added items with missing subtitles triggered"
+def RefreshMissing(randomize=None):
+    Thread.CreateTimer(1.0, lambda: scheduler.run_task("searchAllRecentlyAddedMissing"))
+    header = "Refresh of recently added items with missing subtitles triggered"
     return fatality(header=header, replace_parent=True)
 
 
 @route(PREFIX + '/advanced')
 def AdvancedMenu(randomize=None, header=None, message=None):
-    oc = ObjectContainer(header=header or "Internal stuff, pay attention!", message=message, no_cache=True, no_history=True,
-                         replace_parent=True, title2="Advanced")
+    oc = SZObjectContainer(header=header or "Internal stuff, pay attention!", message=message, no_cache=True, no_history=True,
+                         replace_parent=False, title2="Advanced")
 
     oc.add(DirectoryObject(
         key=Callback(TriggerRestart, randomize=timestamp()),
@@ -522,10 +558,9 @@ def DispatchRestart():
 
 @route(PREFIX + '/advanced/restart/trigger')
 @debounce
-def TriggerRestart(randomize=None, trigger=True):
-    if trigger:
-        set_refresh_menu_state("Restarting the plugin")
-        DispatchRestart()
+def TriggerRestart(randomize=None):
+    set_refresh_menu_state("Restarting the plugin")
+    DispatchRestart()
     return fatality(header="Restart triggered, please wait about 5 seconds", force_title=" ", only_refresh=True, replace_parent=True,
                     no_history=True, randomize=timestamp())
 
@@ -538,7 +573,7 @@ def Restart():
 @route(PREFIX + '/storage/reset', sure=bool)
 def ResetStorage(key, randomize=None, sure=False):
     if not sure:
-        oc = ObjectContainer(no_history=True, title1="Reset subtitle storage", title2="Are you sure?")
+        oc = SZObjectContainer(no_history=True, title1="Reset subtitle storage", title2="Are you sure?")
         oc.add(DirectoryObject(
             key=Callback(ResetStorage, key=key, sure=True, randomize=timestamp()),
             title=pad_title("Are you really sure?"),
