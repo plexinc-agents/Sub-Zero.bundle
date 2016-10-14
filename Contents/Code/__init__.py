@@ -1,6 +1,7 @@
 # coding=utf-8
 import os
 import sys
+import datetime
 
 # just some slight modifications to support sum and iter again
 from subzero.sandbox import restore_builtins
@@ -25,7 +26,6 @@ import interface
 sys.modules["interface"] = interface
 
 from subzero.constants import OS_PLEX_USERAGENT, PERSONAL_MEDIA_IDENTIFIER
-from subzero import intent
 from interface.menu import *
 from support.plex_media import media_to_videos, get_media_item_ids, scan_videos
 from support.subtitlehelpers import get_subtitles_from_metadata, force_utf8
@@ -33,6 +33,7 @@ from support.helpers import notify_executable
 from support.storage import store_subtitle_info, whack_missing_parts
 from support.items import is_ignored
 from support.config import config
+from support.lib import get_intent
 
 
 def Start():
@@ -41,6 +42,17 @@ def Start():
 
     # configured cache to be in memory as per https://github.com/Diaoul/subliminal/issues/303
     subliminal.region.configure('dogpile.cache.memory')
+
+    # clear expired intents
+    intent = get_intent()
+    intent.cleanup()
+
+    # clear expired menu history items
+    now = datetime.datetime.now()
+    if "menu_history" in Dict:
+        for key, timeout in Dict["menu_history"].items():
+            if now > timeout:
+                del Dict["menu_history"][key]
 
     # init defaults; perhaps not the best idea to use ValidatePrefs here, but we'll see
     ValidatePrefs()
@@ -207,6 +219,7 @@ class SubZeroAgent(object):
 
     def update(self, metadata, media, lang):
         Log.Debug("Sub-Zero %s, %s update called" % (config.version, self.agent_type))
+        intent = get_intent()
 
         if not media:
             Log.Error("Called with empty media, something is really wrong with your setup!")
