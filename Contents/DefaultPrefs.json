@@ -339,6 +339,12 @@
     "default": "true"
   },
   {
+    "id": "subtitles.save.chmod",
+      "label": "Set file permissions to (integer, e.g.: 0775)",
+      "type": "text",
+      "default": ""
+  },
+  {
     "id": "subtitles.save.subFolder",
     "label": "Subtitle Folder (\"current folder\" is the folder the current media file lives in)",
     "type": "enum",
@@ -388,7 +394,7 @@
       "default": ""
   },
   {
-    "id": "scheduler.tasks.SearchAllRecentlyAddedMissing",
+    "id": "scheduler.tasks.SearchAllRecentlyAddedMissing.frequency",
     "label": "Scheduler: Periodically search for recent items with missing subtitles",
     "type": "enum",
     "values": [
@@ -426,6 +432,30 @@
     "default": "2000"
   },
   {
+    "id": "scheduler.tasks.FindBetterSubtitles.frequency",
+    "label": "Scheduler: Periodically search for better subtitles",
+    "type": "enum",
+    "values": [
+      "never",
+      "every 6 hours",
+      "every 12 hours",
+      "every 24 hours"
+    ],
+    "default": "every 12 hours"
+  },
+  {
+    "id": "scheduler.tasks.FindBetterSubtitles.max_days_after_added",
+    "label": "Scheduler: Days to search for better subtitles (max: 30 days)",
+    "type": "text",
+    "default": "7"
+  },
+  {
+    "id": "scheduler.tasks.FindBetterSubtitles.overwrite_manually_selected",
+    "label": "Scheduler: Overwride manually selected subtitles when better found",
+    "type": "bool",
+    "default": "true"
+  },
+  {
     "id": "history_size",
     "label": "History: amount of items to store historical data for",
     "type": "enum",
@@ -434,7 +464,7 @@
       "100",
       "150",
       "250",
-      "500",
+      "500"
     ],
     "default": "100"
   },

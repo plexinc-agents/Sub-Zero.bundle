@@ -30,7 +30,7 @@ from support.storage import whack_missing_parts, save_subtitles
 from support.items import is_ignored
 from support.config import config
 from support.lib import get_intent
-from support.helpers import track_usage, get_title_for_video_metadata, get_identifier
+from support.helpers import track_usage, get_title_for_video_metadata, get_identifier, cast_bool
 from support.history import get_history
 
 
@@ -69,7 +69,7 @@ def Start():
         Dict["anon_id"] = get_identifier()
 
     # track usage
-    if bool(Prefs["track_usage"]):
+    if cast_bool(Prefs["track_usage"]):
         if "first_use" not in Dict:
             Dict["first_use"] = datetime.datetime.utcnow()
             Dict.Save()
@@ -163,8 +163,6 @@ class SubZeroAgent(object):
             Log.Error("Called with empty media, something is really wrong with your setup!")
             return
 
-        set_refresh_menu_state(media, media_type=self.agent_type)
-
         item_ids = []
         try:
             config.init_subliminal_patches()
@@ -187,6 +185,8 @@ class SubZeroAgent(object):
             except ValueError:
                 Log.Error("Please only put numbers into the scores setting. Exiting")
                 return
+
+            set_refresh_menu_state(media, media_type=self.agent_type)
 
             # scanned_video_part_map = {subliminal.Video: plex_part, ...}
             scanned_video_part_map = scan_videos(videos, kind=self.agent_type)

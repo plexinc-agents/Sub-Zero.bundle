@@ -10,7 +10,7 @@ from babelfish import Language
 from subzero.lib.io import FileIO, get_viable_encoding
 from subzero.constants import PLUGIN_NAME, PLUGIN_IDENTIFIER, MOVIE, SHOW
 from lib import Plex
-from helpers import check_write_permissions
+from helpers import check_write_permissions, cast_bool
 
 SUBTITLE_EXTS = ['utf', 'utf8', 'utf-8', 'srt', 'smi', 'rt', 'ssa', 'aqt', 'jss', 'ass', 'idx', 'sub', 'txt', 'psb']
 VIDEO_EXTS = ['3g2', '3gp', 'asf', 'asx', 'avc', 'avi', 'avs', 'bivx', 'bup', 'divx', 'dv', 'dvr-ms', 'evo', 'fli', 'flv',
@@ -63,6 +63,7 @@ class Config(object):
         self.enabled_sections = self.check_enabled_sections()
         self.permissions_ok = self.check_permissions()
         self.notify_executable = self.check_notify_executable()
+        self.chmod = self.check_chmod()
         self.initialized = True
 
     def refresh_permissions_status(self):
@@ -206,7 +207,7 @@ class Config(object):
         if not Prefs["subtitles.save.filesystem"]:
             return
 
-        fld_custom = Prefs["subtitles.save.subFolder.Custom"].strip() if bool(Prefs["subtitles.save.subFolder.Custom"]) else None
+        fld_custom = Prefs["subtitles.save.subFolder.Custom"].strip() if cast_bool(Prefs["subtitles.save.subFolder.Custom"]) else None
         return fld_custom or (Prefs["subtitles.save.subFolder"] if Prefs["subtitles.save.subFolder"] != "current folder" else None)
 
     def get_providers(self):
@@ -230,6 +231,23 @@ class Config(object):
                              }
 
         return provider_settings
+
+    def check_chmod(self):
+        val = Prefs["subtitles.save.chmod"]
+        if not val or not len(val):
+            return
+
+        wrong_chmod = False
+        if len(val) != 4:
+            wrong_chmod = True
+
+        try:
+            return int(val, 8)
+        except ValueError:
+            wrong_chmod = True
+
+        if wrong_chmod:
+            Log.Warning("Chmod setting ignored, please use only 4-digit integers with leading 0 (e.g.: 775)")
 
     def init_subliminal_patches(self):
         # configure custom subtitle destination folders for scanning pre-existing subs

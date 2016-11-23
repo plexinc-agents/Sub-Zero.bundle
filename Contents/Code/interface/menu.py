@@ -6,9 +6,10 @@ import os
 from menu_helpers import add_ignore_options, dig_tree, set_refresh_menu_state, \
     should_display_ignore, enable_channel_wrapper, default_thumb, debounce, SZObjectContainer
 from subzero.constants import TITLE, ART, ICON, PREFIX, PLUGIN_IDENTIFIER, DEPENDENCY_MODULE_NAMES
+from subzero.history_storage import mode_map
 from support.background import scheduler
 from support.config import config
-from support.helpers import pad_title, timestamp, get_language, df
+from support.helpers import pad_title, timestamp, get_language, df, cast_bool
 from support.ignore import ignore_list
 from support.items import get_item, get_on_deck_items, refresh_item, get_all_items, get_recent_items, get_items_info, \
     get_item_thumb, get_item_kind_from_rating_key
@@ -440,9 +441,9 @@ def HistoryMenu():
         oc.add(DirectoryObject(
             key=Callback(ItemDetailsMenu, title=item.title, item_title=item.item_title,
                          rating_key=item.rating_key),
-            title=u"%s" % item.item_title,
-            summary=u"%s in %s (%s, score: %s), %s" % (item.lang_name, item.section_title, item.provider_name,
-                                                       item.score, df(item.time))
+            title=u"%s (%s)" % (item.item_title, item.mode_verbose),
+            summary=u"%s in %s (%s, score: %s), %s" % (item.lang_name, item.section_title,
+                                                       item.provider_name, item.score, df(item.time))
         ))
 
     return oc
@@ -502,7 +503,7 @@ def ItemDetailsMenu(rating_key, title=None, base_title=None, item_title=None, ra
         for lang in config.lang_list:
             lang_a2 = lang.alpha2
             # ietf lang?
-            if bool(Prefs["subtitles.language.ietf"]) and "-" in lang_a2:
+            if cast_bool(Prefs["subtitles.language.ietf"]) and "-" in lang_a2:
                 lang_a2 = lang_a2.split("-")[0]
 
             sub_data_for_lang = sub_part_data.get(lang_a2, {})
@@ -532,9 +533,9 @@ def ItemDetailsMenu(rating_key, title=None, base_title=None, item_title=None, ra
                 current_sub_link = current_subtitle.get("link")
                 current_score = current_subtitle["score"]
 
-                summary = u"Current subtitle%s: %s (added: %s), Language: %s, Score: %i, Storage: %s" % \
+                summary = u"Current subtitle%s: %s (added: %s, %s), Language: %s, Score: %i, Storage: %s" % \
                           (u" (legacy/inaccurate)" if legacy_storage else "", current_sub_provider_name,
-                           df(current_subtitle["date_added"]), lang,
+                           df(current_subtitle["date_added"]), mode_map.get(current_subtitle.get("mode", "a")), lang,
                            current_subtitle["score"], current_subtitle["storage"])
 
             oc.add(DirectoryObject(
@@ -552,7 +553,10 @@ def ItemDetailsMenu(rating_key, title=None, base_title=None, item_title=None, ra
     return oc
 
 
-MANUAL_SUB_SEARCH = {}
+def get_item_task_data(task_name, rating_key, language):
+    task_data = scheduler.get_task_data(task_name)
+    search_results = task_data.get(rating_key, {}) if task_data else {}
+    return search_results.get(language)
 
 
 @route(PREFIX + '/item/search/{rating_key}/{part_id}', force=bool)
@@ -562,12 +566,12 @@ def ListAvailableSubsForItemMenu(rating_key=None, part_id=None, title=None, item
                                  current_provider=None, current_score=None, randomize=None):
     assert rating_key, part_id
 
-    #config.init_subliminal_patches()
     running = scheduler.is_task_running("AvailableSubsForItem")
-    task_data = scheduler.get_task_data("AvailableSubsForItem")
-    search_results = task_data.get(rating_key, None) if task_data else None
+    search_results = get_item_task_data("AvailableSubsForItem", rating_key, language)
+
     if (search_results is None or force) and not running:
-        scheduler.dispatch_task("AvailableSubsForItem", rating_key, item_type, part_id, language)
+        scheduler.dispatch_task("AvailableSubsForItem", rating_key=rating_key, item_type=item_type, part_id=part_id,
+                                language=language)
         running = True
 
     oc = SZObjectContainer(title2=title, replace_parent=True)
@@ -621,7 +625,7 @@ def ListAvailableSubsForItemMenu(rating_key=None, part_id=None, title=None, item
     for subtitle in search_results:
         oc.add(DirectoryObject(
             key=Callback(TriggerDownloadSubtitle, rating_key=rating_key, randomize=timestamp(), item_title=item_title,
-                         subtitle_id=str(subtitle.subtitle_id)),
+                         subtitle_id=str(subtitle.subtitle_id), language=language),
             title=u"%s: %s, score: %s" % ("Available" if current_link != subtitle.page_link else "Current",
                                     subtitle.provider_name, subtitle.score),
             summary=u"Release: %s, Matches: %s" % (subtitle.release_info, ", ".join(subtitle.matches)),
@@ -633,10 +637,10 @@ def ListAvailableSubsForItemMenu(rating_key=None, part_id=None, title=None, item
 
 @route(PREFIX + '/download_subtitle/{rating_key}')
 @debounce
-def TriggerDownloadSubtitle(rating_key=None, subtitle_id=None, item_title=None, randomize=None):
+def TriggerDownloadSubtitle(rating_key=None, subtitle_id=None, item_title=None, language=None, randomize=None):
     set_refresh_menu_state("Downloading subtitle for %s" % item_title or rating_key)
-    task_data = scheduler.get_task_data("AvailableSubsForItem")
-    search_results = task_data.get(rating_key, None) if task_data else None
+    search_results = get_item_task_data("AvailableSubsForItem", rating_key, language)
+
     download_subtitle = None
     for subtitle in search_results:
         if str(subtitle.subtitle_id) == subtitle_id:
@@ -646,7 +650,7 @@ def TriggerDownloadSubtitle(rating_key=None, subtitle_id=None, item_title=None, 
         Log.Error(u"Something went horribly wrong")
 
     else:
-        scheduler.dispatch_task("DownloadSubtitleForItem", rating_key, download_subtitle)
+        scheduler.dispatch_task("DownloadSubtitleForItem", rating_key=rating_key, subtitle=download_subtitle)
 
     return fatality(randomize=timestamp(), header=" ", replace_parent=True)
 
@@ -682,6 +686,10 @@ def AdvancedMenu(randomize=None, header=None, message=None):
     oc.add(DirectoryObject(
         key=Callback(TriggerRestart, randomize=timestamp()),
         title=pad_title("Restart the plugin"),
+    ))
+    oc.add(DirectoryObject(
+        key=Callback(TriggerBetterSubtitles, randomize=timestamp()),
+        title=pad_title("Trigger find better subtitles"),
     ))
     oc.add(DirectoryObject(
         key=Callback(LogStorage, key="tasks", randomize=timestamp()),
@@ -809,4 +817,14 @@ def LogStorage(key, randomize=None):
         randomize=timestamp(),
         header='Success',
         message='Information Storage (%s) logged' % key
+    )
+
+
+@route(PREFIX + '/triggerbetter')
+def TriggerBetterSubtitles(randomize=None):
+    scheduler.dispatch_task("FindBetterSubtitles")
+    return AdvancedMenu(
+        randomize=timestamp(),
+        header='Success',
+        message='FindBetterSubtitles triggered'
     )

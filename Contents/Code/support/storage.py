@@ -9,7 +9,7 @@ import subliminal
 
 from subtitlehelpers import force_utf8
 from config import config
-from helpers import notify_executable, get_title_for_video_metadata
+from helpers import notify_executable, get_title_for_video_metadata, cast_bool
 
 
 def get_subtitle_info(rating_key):
@@ -56,7 +56,7 @@ def whack_missing_parts(scanned_video_part_map, existing_parts=None):
         Dict.Save()
 
 
-def store_subtitle_info(scanned_video_part_map, downloaded_subtitles, storage_type):
+def store_subtitle_info(scanned_video_part_map, downloaded_subtitles, storage_type, mode="a"):
     """
     stores information about downloaded subtitles in plex's Dict()
     """
@@ -92,7 +92,7 @@ def store_subtitle_info(scanned_video_part_map, downloaded_subtitles, storage_ty
             # compute title
             title = get_title_for_video_metadata(metadata)
             lang_dict[sub_key] = dict(score=subtitle.score, link=subtitle.page_link, storage=storage_type, hash=Hash.MD5(subtitle.content),
-                                      date_added=datetime.datetime.now(), title=title)
+                                      date_added=datetime.datetime.now(), title=title, mode=mode)
             lang_dict["current"] = sub_key
 
         Dict["subs"][video_id] = video_dict
@@ -121,7 +121,8 @@ def log_storage(key):
 
 
 def save_subtitles_to_file(subtitles):
-    fld_custom = Prefs["subtitles.save.subFolder.Custom"].strip() if bool(Prefs["subtitles.save.subFolder.Custom"]) else None
+    fld_custom = Prefs["subtitles.save.subFolder.Custom"].strip() \
+        if cast_bool(Prefs["subtitles.save.subFolder.Custom"]) else None
 
     for video, video_subtitles in subtitles.items():
         if not video_subtitles:
@@ -142,7 +143,8 @@ def save_subtitles_to_file(subtitles):
             if not os.path.exists(fld):
                 os.makedirs(fld)
         subliminal.api.save_subtitles(video, video_subtitles, directory=fld, single=Prefs['subtitles.only_one'],
-                                      encode_with=force_utf8 if Prefs['subtitles.enforce_encoding'] else None)
+                                      encode_with=force_utf8 if Prefs['subtitles.enforce_encoding'] else None,
+                                      chmod=config.chmod)
     return True
 
 
@@ -155,7 +157,7 @@ def save_subtitles_to_metadata(videos, subtitles):
     return True
 
 
-def save_subtitles(scanned_video_part_map, downloaded_subtitles):
+def save_subtitles(scanned_video_part_map, downloaded_subtitles, mode="a"):
     meta_fallback = False
     save_successful = False
     storage = "metadata"
@@ -182,4 +184,4 @@ def save_subtitles(scanned_video_part_map, downloaded_subtitles):
     if save_successful and config.notify_executable:
         notify_executable(config.notify_executable, scanned_video_part_map, downloaded_subtitles, storage)
 
-    store_subtitle_info(scanned_video_part_map, downloaded_subtitles, storage)
+    store_subtitle_info(scanned_video_part_map, downloaded_subtitles, storage, mode=mode)
