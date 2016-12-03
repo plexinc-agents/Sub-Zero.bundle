@@ -14,7 +14,12 @@ class SubtitleHelper(object):
 
 def subtitle_helpers(filename):
     filename = helpers.unicodize(filename)
-    for cls in [VobSubSubtitleHelper, DefaultSubtitleHelper]:
+    helper_classes = [DefaultSubtitleHelper]
+
+    if helpers.cast_bool(Prefs["subtitles.scan.exotic_ext"]):
+        helper_classes.insert(0, VobSubSubtitleHelper)
+
+    for cls in helper_classes:
         if cls.is_helper_for(filename):
             return cls(filename)
     return None
@@ -80,9 +85,13 @@ class VobSubSubtitleHelper(SubtitleHelper):
 #####################################################################################################################
 
 
+IETF_MATCH = ".+\.([^-.]+)(?:-[A-Za-z]+)?$"
+ENDSWITH_LANGUAGECODE_RE = re.compile("\.([^-.]{2,3})(?:-[A-Za-z]{2})?$")
+
+
 def match_ietf_language(s):
     language_match = re.match(".+\.([^\.]+)$" if not helpers.cast_bool(Prefs["subtitles.language.ietf"])
-                              else ".+\.([^-.]+)(?:-[A-Za-z]+)?$", s)
+                              else IETF_MATCH, s)
     if language_match and len(language_match.groups()) == 1:
         language = language_match.groups()[0]
         return language
@@ -99,17 +108,35 @@ class DefaultSubtitleHelper(SubtitleHelper):
 
         lang_sub_map = {}
 
+        if not os.path.exists(self.filename):
+            return lang_sub_map
+
         basename = os.path.basename(self.filename)
         (file, ext) = os.path.splitext(self.filename)
 
         # Remove the initial '.' from the extension
         ext = ext[1:]
 
+        forced = ''
+        default = ''
+        split_tag = file.rsplit('.', 1)
+        if len(split_tag) > 1 and split_tag[1].lower() in ['forced', 'normal', 'default']:
+            file = split_tag[0]
+            # don't do anything with 'normal', we don't need it
+            if 'forced' == split_tag[1].lower():
+                forced = '1'
+            if 'default' == split_tag[1].lower():
+                default = '1'
+
         # Attempt to extract the language from the filename (e.g. Avatar (2009).eng)
         language = ""
 
         # IETF support thanks to https://github.com/hpsbranco/LocalMedia.bundle/commit/4fad9aefedece78a1fa96401304351347f644369
         language = Locale.Language.Match(match_ietf_language(file))
+
+        # skip non-SRT if wanted
+        if not helpers.cast_bool(Prefs["subtitles.scan.exotic_ext"]) and ext not in ["srt", "ass", "ssa"]:
+            return lang_sub_map
 
         codec = None
         format = None
@@ -137,8 +164,10 @@ class DefaultSubtitleHelper(SubtitleHelper):
         if format is None:
             format = codec
 
-        Log('Found subtitle file: ' + self.filename + ' language: ' + language + ' codec: ' + str(codec) + ' format: ' + str(format))
-        part.subtitles[language][basename] = Proxy.LocalFile(self.filename, codec=codec, format=format)
+        Log('Found subtitle file: ' + self.filename + ' language: ' + language + ' codec: ' + str(
+            codec) + ' format: ' + str(format) + ' default: ' + default + ' forced: ' + forced)
+        part.subtitles[language][basename] = Proxy.LocalFile(self.filename, codec=codec, format=format, default=default,
+                                                             forced=forced)
 
         lang_sub_map[language] = [basename]
         return lang_sub_map

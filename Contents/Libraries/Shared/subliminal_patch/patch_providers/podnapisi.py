@@ -3,6 +3,7 @@
 import logging
 import io
 import re
+
 try:
     from lxml import etree
 except ImportError:
@@ -12,6 +13,8 @@ except ImportError:
         import xml.etree.ElementTree as etree
 from babelfish import Language
 from zipfile import ZipFile
+from subliminal import Episode
+from subliminal import Movie
 from subliminal.providers.podnapisi import PodnapisiProvider, PodnapisiSubtitle, fix_line_ending, ProviderError
 from mixins import ProviderRetryMixin
 
@@ -29,6 +32,25 @@ class PatchedPodnapisiSubtitle(PodnapisiSubtitle):
 
 
 class PatchedPodnapisiProvider(ProviderRetryMixin, PodnapisiProvider):
+    only_foreign = False
+
+    def __init__(self, only_foreign=False):
+        self.only_foreign = only_foreign
+
+        if only_foreign:
+            logger.info("Only searching for foreign/forced subtitles")
+
+        super(PatchedPodnapisiProvider, self).__init__()
+
+    def list_subtitles(self, video, languages):
+        if isinstance(video, Episode):
+            return [s for l in languages for s in self.query(l, video.series, season=video.season,
+                                                             episode=video.episode, year=video.year,
+                                                             only_foreign=self.only_foreign)]
+        elif isinstance(video, Movie):
+            return [s for l in languages for s in self.query(l, video.title, year=video.year,
+                                                             only_foreign=self.only_foreign)]
+
     def download_subtitle(self, subtitle):
         # download as a zip
         logger.info('Downloading subtitle %r', subtitle)
@@ -43,7 +65,7 @@ class PatchedPodnapisiProvider(ProviderRetryMixin, PodnapisiProvider):
 
             subtitle.content = fix_line_ending(zf.read(zf.namelist()[0]))
 
-    def query(self, language, keyword, season=None, episode=None, year=None):
+    def query(self, language, keyword, season=None, episode=None, year=None, only_foreign=False):
         # set parameters, see http://www.podnapisi.net/forum/viewtopic.php?f=62&t=26164#p212652
         params = {'sXML': 1, 'sL': str(language), 'sK': keyword}
         is_episode = False
@@ -73,6 +95,13 @@ class PatchedPodnapisiProvider(ProviderRetryMixin, PodnapisiProvider):
                 # read xml elements
                 language = Language.fromietf(subtitle_xml.find('language').text)
                 hearing_impaired = 'n' in (subtitle_xml.find('flags').text or '')
+                foreign = 'f' in (subtitle_xml.find('flags').text or '')
+                if only_foreign and not foreign:
+                    continue
+
+                if not only_foreign and foreign:
+                    continue
+
                 page_link = subtitle_xml.find('url').text
                 pid = subtitle_xml.find('pid').text
                 releases = []

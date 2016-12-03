@@ -12,9 +12,10 @@ logger = logging.getLogger(__name__)
 
 # may be absolute or relative paths; set to selected options
 CUSTOM_PATHS = []
+INCLUDE_EXOTIC_SUBS = True
 
 
-def _search_external_subtitles(path):
+def _search_external_subtitles(path, forced_tag=False):
     dirpath, filename = os.path.split(path)
     dirpath = dirpath or '.'
     fileroot, fileext = os.path.splitext(filename)
@@ -24,8 +25,25 @@ def _search_external_subtitles(path):
         if not p.startswith(fileroot) or not p.endswith(SUBTITLE_EXTENSIONS):
             continue
 
+        p_root, p_ext = os.path.splitext(p)
+        if not INCLUDE_EXOTIC_SUBS and p_ext not in (".srt", ".ass", ".ssa"):
+            continue
+
+        # extract potential forced/normal/default tag
+        # fixme: duplicate from subtitlehelpers
+        split_tag = p_root.rsplit('.', 1)
+        adv_tag = None
+        if len(split_tag) > 1:
+            adv_tag = split_tag[1].lower()
+            if adv_tag in ['forced', 'normal', 'default']:
+                p_root = split_tag[0]
+
+        # forced wanted but NIL
+        if forced_tag and adv_tag != "forced":
+            continue
+
         # extract the potential language code
-        language_code = p[len(fileroot):-len(os.path.splitext(p)[1])].replace(fileext, '').replace('_', '-')[1:]
+        language_code = p_root[len(fileroot):].replace('_', '-')[1:]
 
         # default language is undefined
         language = Language('und')
@@ -44,7 +62,7 @@ def _search_external_subtitles(path):
     return subtitles
 
 
-def patched_search_external_subtitles(path):
+def patched_search_external_subtitles(path, forced_tag=False):
     """
     wrap original search_external_subtitles function to search multiple paths for one given video
     # todo: cleanup and merge with _search_external_subtitles
@@ -62,12 +80,13 @@ def patched_search_external_subtitles(path):
         logger.debug("external subs: scanning path %s", abspath)
 
         if os.path.isdir(os.path.dirname(abspath)):
-            subtitles.update(_search_external_subtitles(abspath))
+            subtitles.update(_search_external_subtitles(abspath, forced_tag=forced_tag))
     logger.debug("external subs: found %s", subtitles)
     return subtitles
 
 
-def scan_video(path, subtitles=True, embedded_subtitles=True, hints=None, video_fps=None, dont_use_actual_file=False):
+def scan_video(path, subtitles=True, embedded_subtitles=True, hints=None, video_fps=None, dont_use_actual_file=False,
+               forced_tag=False):
     """Scan a video and its subtitle languages from a video `path`.
     :param dont_use_actual_file: guess on filename, but don't use the actual file itself
     :param str path: existing path to the video.
@@ -101,10 +120,6 @@ def scan_video(path, subtitles=True, embedded_subtitles=True, hints=None, video_
     video = Video.fromguess(path, guess_file_info(guess_from, options=hints))
     video.fps = video_fps
 
-    # trust plex's series name
-    if video_type == "episode" and hints.get("expected_series"):
-        video.series = hints.get("expected_series")[0]
-
     # trust plex's movie name
     if video_type == "movie" and hints.get("expected_title"):
         video.title = hints.get("expected_title")[0]
@@ -124,7 +139,7 @@ def scan_video(path, subtitles=True, embedded_subtitles=True, hints=None, video_
 
     # external subtitles
     if subtitles:
-        video.subtitle_languages |= set(patched_search_external_subtitles(path).values())
+        video.subtitle_languages |= set(patched_search_external_subtitles(path, forced_tag=forced_tag).values())
 
 
     # video metadata with enzyme

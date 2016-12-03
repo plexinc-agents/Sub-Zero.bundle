@@ -211,23 +211,33 @@ class Config(object):
         return fld_custom or (Prefs["subtitles.save.subFolder"] if Prefs["subtitles.save.subFolder"] != "current folder" else None)
 
     def get_providers(self):
-        providers = {'opensubtitles': Prefs['provider.opensubtitles.enabled'],
+        providers = {'opensubtitles': cast_bool(Prefs['provider.opensubtitles.enabled']),
                      #'thesubdb': Prefs['provider.thesubdb.enabled'],
-                     'podnapisi': Prefs['provider.podnapisi.enabled'],
-                     'addic7ed': Prefs['provider.addic7ed.enabled'],
-                     'tvsubtitles': Prefs['provider.tvsubtitles.enabled']
+                     'podnapisi': cast_bool(Prefs['provider.podnapisi.enabled']),
+                     'addic7ed': cast_bool(Prefs['provider.addic7ed.enabled']),
+                     'tvsubtitles': cast_bool(Prefs['provider.tvsubtitles.enabled'])
                      }
+
+        # ditch non-forced-subtitles-reporting providers
+        if cast_bool(Prefs['subtitles.only_foreign']):
+            providers["addic7ed"] = False
+            providers["tvsubtitles"] = False
+
         return filter(lambda prov: providers[prov], providers)
 
     def get_provider_settings(self):
         provider_settings = {'addic7ed': {'username': Prefs['provider.addic7ed.username'],
                                           'password': Prefs['provider.addic7ed.password'],
-                                          'use_random_agents': Prefs['provider.addic7ed.use_random_agents'],
+                                          'use_random_agents': cast_bool(Prefs['provider.addic7ed.use_random_agents']),
                                           },
                              'opensubtitles': {'username': Prefs['provider.opensubtitles.username'],
                                                'password': Prefs['provider.opensubtitles.password'],
-                                               'use_tag_search': Prefs['provider.opensubtitles.use_tags']
+                                               'use_tag_search': cast_bool(Prefs['provider.opensubtitles.use_tags']),
+                                               'only_foreign': cast_bool(Prefs['subtitles.only_foreign'])
                                                },
+                             'podnapisi': {
+                                 'only_foreign': cast_bool(Prefs['subtitles.only_foreign'])
+                             },
                              }
 
         return provider_settings
@@ -254,6 +264,7 @@ class Config(object):
         Log.Debug("Patching subliminal ...")
         dest_folder = self.subtitle_destination_folder
         subliminal_patch.patch_video.CUSTOM_PATHS = [dest_folder] if dest_folder else []
+        subliminal_patch.patch_video.INCLUDE_EXOTIC_SUBS = cast_bool(Prefs["subtitles.scan.exotic_ext"])
         subliminal_patch.patch_provider_pool.DOWNLOAD_TRIES = int(Prefs['subtitles.try_downloads'])
         subliminal.video.Episode.scores["addic7ed_boost"] = int(Prefs['provider.addic7ed.boost_by'])
 

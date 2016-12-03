@@ -11,7 +11,7 @@ from support.background import scheduler
 from support.config import config
 from support.helpers import pad_title, timestamp, get_language, df, cast_bool
 from support.ignore import ignore_list
-from support.items import get_item, get_on_deck_items, refresh_item, get_all_items, get_recent_items, get_items_info, \
+from support.items import get_item, get_on_deck_items, refresh_item, get_all_items, get_items_info, \
     get_item_thumb, get_item_kind_from_rating_key
 from support.lib import Plex
 from support.missing_subtitles import items_get_all_missing_subs
@@ -79,13 +79,20 @@ def fatality(randomize=None, force_title=None, header=None, message=None, only_r
         oc.add(DirectoryObject(
             key=Callback(OnDeckMenu),
             title="On Deck items",
-            summary="Shows the current on deck items and allows you to individually (force-) refresh their metadata/subtitles."
+            summary="Shows the current on deck items and allows you to individually (force-) refresh their metadata/"
+                    "subtitles."
+        ))
+        oc.add(DirectoryObject(
+            key=Callback(RecentlyAddedMenu),
+            title="Recently Added items",
+            summary="Shows the recently added items per section."
         ))
         oc.add(DirectoryObject(
             key=Callback(RecentMissingSubtitlesMenu, randomize=timestamp()),
             title="Items with missing subtitles",
             summary="Shows the items honoring the configured 'Item age to be considered recent'-setting (%s)"
-                    " and allowing you to individually (force-) refresh their metadata/subtitles. " % Prefs["scheduler.item_is_recent_age"]
+                    " and allowing you to individually (force-) refresh their metadata/subtitles. " %
+                    Prefs["scheduler.item_is_recent_age"]
         ))
         oc.add(DirectoryObject(
             key=Callback(SectionsMenu),
@@ -149,6 +156,16 @@ def OnDeckMenu(message=None):
     :return:
     """
     return mergedItemsMenu(title="Items On Deck", base_title="Items On Deck", itemGetter=get_on_deck_items)
+
+
+@route(PREFIX + '/recently_added')
+def RecentlyAddedMenu(message=None):
+    """
+    displays the items recently added per section
+    :param message:
+    :return:
+    """
+    return SectionsMenu(base_title="Recently added", section_items_key="recently_added", ignore_options=False)
 
 
 @route(PREFIX + '/recent', force=bool)
@@ -216,13 +233,15 @@ def mergedItemsMenu(title, itemGetter, itemGetterKwArgs=None, base_title=None, *
     return oc
 
 
-def determine_section_display(kind, item):
+def determine_section_display(kind, item, pass_kwargs=None):
     """
     returns the menu function for a section based on the size of it (amount of items)
     :param kind:
     :param item:
     :return:
     """
+    if pass_kwargs and pass_kwargs.get("section_items_key", "all") != "all":
+        return SectionMenu
     if item.size > 80:
         return SectionFirstLetterMenu
     return SectionMenu
@@ -279,7 +298,7 @@ def IgnoreMenu(kind, rating_key, title=None, sure=False, todo="not_set"):
 
 
 @route(PREFIX + '/sections')
-def SectionsMenu():
+def SectionsMenu(base_title="Sections", section_items_key="all", ignore_options=True):
     """
     displays the menu for all sections
     :return:
@@ -287,14 +306,18 @@ def SectionsMenu():
     items = get_all_items("sections")
 
     return dig_tree(SZObjectContainer(title2="Sections", no_cache=True, no_history=True), items, None,
-                    menu_determination_callback=determine_section_display, pass_kwargs={"base_title": "Sections"},
+                    menu_determination_callback=determine_section_display, pass_kwargs={"base_title": base_title,
+                                                                                        "section_items_key": section_items_key,
+                                                                                        "ignore_options": ignore_options},
                     fill_args={"title": "section_title"})
 
 
 @route(PREFIX + '/section', ignore_options=bool)
-def SectionMenu(rating_key, title=None, base_title=None, section_title=None, ignore_options=True):
+def SectionMenu(rating_key, title=None, base_title=None, section_title=None, ignore_options=True,
+                section_items_key="all"):
     """
     displays the contents of a section
+    :param section_items_key:
     :param rating_key:
     :param title:
     :param base_title:
@@ -302,7 +325,7 @@ def SectionMenu(rating_key, title=None, base_title=None, section_title=None, ign
     :param ignore_options:
     :return:
     """
-    items = get_all_items(key="all", value=rating_key, base="library/sections")
+    items = get_all_items(key=section_items_key, value=rating_key, base="library/sections")
 
     kind, deeper = get_items_info(items)
     title = unicode(title)
@@ -319,9 +342,12 @@ def SectionMenu(rating_key, title=None, base_title=None, section_title=None, ign
 
 
 @route(PREFIX + '/section/firstLetter', deeper=bool)
-def SectionFirstLetterMenu(rating_key, title=None, base_title=None, section_title=None):
+def SectionFirstLetterMenu(rating_key, title=None, base_title=None, section_title=None, ignore_options=True,
+                           section_items_key="all"):
     """
     displays the contents of a section indexed by its first char (A-Z, 0-9...)
+    :param ignore_options: ignored
+    :param section_items_key: ignored
     :param rating_key:
     :param title:
     :param base_title:
@@ -398,20 +424,21 @@ def MetadataMenu(rating_key, title=None, base_title=None, display_items=False, p
 
         timeout = 30
         if current_kind == "season":
-            timeout = 90
-        elif current_kind == "series":
             timeout = 360
+        elif current_kind == "series":
+            timeout = 1800
 
         # add refresh
         oc.add(DirectoryObject(
             key=Callback(RefreshItem, rating_key=rating_key, item_title=title, refresh_kind=current_kind,
                          previous_rating_key=previous_rating_key, timeout=timeout*1000, randomize=timestamp()),
             title=u"Refresh: %s" % item_title,
-            summary="Refreshes the item, possibly picking up new subtitles on disk"
+            summary="Refreshes the %s, possibly searching for missing and picking up new subtitles on disk" % current_kind
         ))
         oc.add(DirectoryObject(
             key=Callback(RefreshItem, rating_key=rating_key, item_title=title, force=True,
-                         refresh_kind=current_kind, previous_rating_key=previous_rating_key, timeout=timeout*1000),
+                         refresh_kind=current_kind, previous_rating_key=previous_rating_key, timeout=timeout*1000,
+                         randomize=timestamp()),
             title=u"Auto-Find subtitles: %s" % item_title,
             summary="Issues a forced refresh, ignoring known subtitles and searching for new ones"
         ))
@@ -463,6 +490,7 @@ def ItemDetailsMenu(rating_key, title=None, base_title=None, item_title=None, ra
     """
     title = unicode(base_title) + " > " + unicode(title) if base_title else unicode(title)
     item = get_item(rating_key)
+    current_kind = get_item_kind_from_rating_key(rating_key)
 
     timeout = 30
 
@@ -471,7 +499,7 @@ def ItemDetailsMenu(rating_key, title=None, base_title=None, item_title=None, ra
         key=Callback(RefreshItem, rating_key=rating_key, item_title=item_title, randomize=timestamp(),
                      timeout=timeout*1000),
         title=u"Refresh: %s" % item_title,
-        summary="Refreshes the item, possibly picking up new subtitles on disk",
+        summary="Refreshes the %s, possibly searching for missing and picking up new subtitles on disk" % current_kind,
         thumb=item.thumb or default_thumb
     ))
     oc.add(DirectoryObject(
@@ -658,7 +686,7 @@ def RefreshItem(rating_key=None, came_from="/recent", item_title=None, force=Fal
 @route(PREFIX + '/missing/refresh')
 @debounce
 def RefreshMissing(randomize=None):
-    Thread.CreateTimer(1.0, lambda: scheduler.run_task("SearchAllRecentlyAddedMissing"))
+    scheduler.dispatch_task("SearchAllRecentlyAddedMissing")
     header = "Refresh of recently added items with missing subtitles triggered"
     return fatality(header=header, replace_parent=True)
 

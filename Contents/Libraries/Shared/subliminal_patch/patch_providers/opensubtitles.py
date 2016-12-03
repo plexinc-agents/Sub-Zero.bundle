@@ -61,16 +61,22 @@ class TimeoutTransport(Transport):
 
 
 class PatchedOpenSubtitlesProvider(ProviderRetryMixin, OpenSubtitlesProvider):
-    def __init__(self, username=None, password=None, use_tag_search=False):
+    only_foreign = True
+
+    def __init__(self, username=None, password=None, use_tag_search=False, only_foreign=False):
         if username is not None and password is None or username is None and password is not None:
             raise ConfigurationError('Username and password must be specified')
 
         self.username = username or ''
         self.password = password or ''
         self.use_tag_search = use_tag_search
+        self.only_foreign = only_foreign
 
         if use_tag_search:
             logger.info("Using tag/exact filename search")
+
+        if only_foreign:
+            logger.info("Only searching for foreign/forced subtitles")
 
         super(PatchedOpenSubtitlesProvider, self).__init__()
         self.server = ServerProxy('http://api.opensubtitles.org/xml-rpc', TimeoutTransport(10))
@@ -106,9 +112,11 @@ class PatchedOpenSubtitlesProvider(ProviderRetryMixin, OpenSubtitlesProvider):
             query = video.title
 
         return self.query(languages, hash=video.hashes.get('opensubtitles'), size=video.size, imdb_id=video.imdb_id,
-                          query=query, season=season, episode=episode, tag=os.path.basename(video.name), use_tag_search=self.use_tag_search)
+                          query=query, season=season, episode=episode, tag=os.path.basename(video.name),
+                          use_tag_search=self.use_tag_search, only_foreign=self.only_foreign)
 
-    def query(self, languages, hash=None, size=None, imdb_id=None, query=None, season=None, episode=None, tag=None, use_tag_search=False):
+    def query(self, languages, hash=None, size=None, imdb_id=None, query=None, season=None, episode=None, tag=None,
+              use_tag_search=False, only_foreign=False):
         # fill the search criteria
         criteria = []
         if hash and size:
@@ -155,6 +163,17 @@ class PatchedOpenSubtitlesProvider(ProviderRetryMixin, OpenSubtitlesProvider):
             movie_fps = subtitle_item.get('MovieFPS')
             series_season = int(subtitle_item['SeriesSeason']) if subtitle_item['SeriesSeason'] else None
             series_episode = int(subtitle_item['SeriesEpisode']) if subtitle_item['SeriesEpisode'] else None
+            sub_file_name = subtitle_item.get('SubFileName')
+            foreign_parts_only = bool(int(subtitle_item.get('SubForeignPartsOnly', 0)))
+
+            # foreign/forced subtitles only wanted
+            if only_foreign and not foreign_parts_only:
+                continue
+
+            # foreign/forced not wanted
+            if not only_foreign and foreign_parts_only:
+                continue
+
             query_parameters = subtitle_item.get("QueryParameters")
 
             subtitle = PatchedOpenSubtitlesSubtitle(language, hearing_impaired, page_link, subtitle_id, matched_by, movie_kind,
