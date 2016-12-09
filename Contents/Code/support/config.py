@@ -40,11 +40,15 @@ class Config(object):
     max_recent_items_per_library = 200
     permissions_ok = False
     missing_permissions = None
+    ignore_sz_files = False
     ignore_paths = None
     fs_encoding = None
     notify_executable = None
     sections = None
     enabled_sections = None
+    enforce_encoding = False
+    chmod = None
+    forced_only = False
 
     initialized = False
 
@@ -59,11 +63,14 @@ class Config(object):
         self.max_recent_items_per_library = int_or_default(Prefs["scheduler.max_recent_items_per_library"], 2000)
         self.sections = list(Plex["library"].sections())
         self.missing_permissions = []
+        self.ignore_sz_files = cast_bool(Prefs["subtitles.ignore_fs"])
         self.ignore_paths = self.parse_ignore_paths()
         self.enabled_sections = self.check_enabled_sections()
         self.permissions_ok = self.check_permissions()
         self.notify_executable = self.check_notify_executable()
+        self.enforce_encoding = cast_bool(Prefs['subtitles.enforce_encoding'])
         self.chmod = self.check_chmod()
+        self.forced_only = cast_bool(Prefs["subtitles.only_foreign"])
         self.initialized = True
 
     def refresh_permissions_status(self):
