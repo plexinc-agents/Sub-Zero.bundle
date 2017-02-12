@@ -32,6 +32,7 @@ from support.config import config
 from support.lib import get_intent
 from support.helpers import track_usage, get_title_for_video_metadata, get_identifier, cast_bool
 from support.history import get_history
+from support.data import migrate
 
 
 def Start():
@@ -52,6 +53,12 @@ def Start():
             if now > timeout:
                 del Dict["menu_history"][key]
 
+    # run migrations
+    migrate()
+
+    # clear old task data
+    scheduler.clear_task_data()
+
     # init defaults; perhaps not the best idea to use ValidatePrefs here, but we'll see
     ValidatePrefs()
     Log.Debug(config.full_version)
@@ -60,7 +67,6 @@ def Start():
         Log.Error("Insufficient permissions on library folders:")
         for title, path in config.missing_permissions:
             Log.Error("Insufficient permissions on library %s, folder: %s" % (title, path))
-        return
 
     # run task scheduler
     scheduler.run()
@@ -190,6 +196,9 @@ class SubZeroAgent(object):
                 return
 
             set_refresh_menu_state(media, media_type=self.agent_type)
+
+            # find local media
+            update_local_media(metadata, media, media_type=self.agent_type)
 
             # scanned_video_part_map = {subliminal.Video: plex_part, ...}
             scanned_video_part_map = scan_videos(videos, kind=self.agent_type)
