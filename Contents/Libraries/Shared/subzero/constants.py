@@ -2,7 +2,7 @@
 
 OS_PLEX_USERAGENT = 'plexapp.com v9.0'
 
-DEPENDENCY_MODULE_NAMES = ['subliminal', 'subliminal_patch', 'enzyme', 'guessit']
+DEPENDENCY_MODULE_NAMES = ['subliminal', 'subliminal_patch', 'enzyme', 'guessit', 'subzero']
 PERSONAL_MEDIA_IDENTIFIER = "com.plexapp.agents.none"
 PLUGIN_IDENTIFIER_SHORT = "subzero"
 PLUGIN_IDENTIFIER = "com.plexapp.agents.%s" % PLUGIN_IDENTIFIER_SHORT
@@ -30,3 +30,10 @@ PICTURE = 12
 PHOTO = 13
 CLIP = 14
 PLAYLIST_ITEM = 15
+
+
+mode_map = {
+    "a": "auto",
+    "m": "manual",
+    "b": "auto-better"
+}
