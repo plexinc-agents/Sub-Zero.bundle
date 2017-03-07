@@ -1,4 +1,5 @@
 # coding=utf-8
+from urllib2 import URLError
 
 
 def migrate():
@@ -29,7 +30,11 @@ def migrate():
         subtitle_storage = get_subtitle_storage()
 
         for video_id, parts in Dict["subs"].iteritems():
-            item = get_item(video_id)
+            try:
+                item = get_item(video_id)
+            except URLError:
+                continue
+
             if not item:
                 continue
 
@@ -49,7 +54,7 @@ def migrate():
                         current_key = subs["current"]
                         provider_name, subtitle_id = current_key
                         sub = subs.get(current_key)
-                        if sub:
+                        if sub and sub.get("title") and sub.get("mode"):  # ditch legacy data without sufficient info
                             stored_subs.title = sub["title"]
                             new_sub = StoredSubtitle(sub["score"], sub["storage"], sub["hash"], provider_name,
                                                      subtitle_id, date_added=sub["date_added"], mode=sub["mode"])
