@@ -3,6 +3,7 @@ import datetime
 import hashlib
 import os
 import logging
+import traceback
 
 from constants import mode_map
 
@@ -142,7 +143,9 @@ class StoredSubtitlesManager(object):
         fl = self.get_recent_files(age_days=age_days)
         out = {}
         for fn in fl:
-            out[fn] = self.load(filename=fn)
+            data = self.load(filename=fn)
+            if data:
+                out[fn] = data
         return out
 
     def migrate_v2(self, subs_for_video):
@@ -153,7 +156,12 @@ class StoredSubtitlesManager(object):
         return True
 
     def load(self, video_id=None, filename=None):
-        subs_for_video = self.storage.LoadObject(self.get_storage_filename(video_id) if video_id else filename)
+        subs_for_video = None
+        fn = self.get_storage_filename(video_id) if video_id else filename
+        try:
+            subs_for_video = self.storage.LoadObject(fn)
+        except:
+            logger.error("Failed to load item %s: %s" % (fn, traceback.format_exc()))
 
         if not subs_for_video:
             return
