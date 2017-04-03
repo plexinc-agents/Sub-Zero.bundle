@@ -10,13 +10,21 @@ Checkout **[the Sub-Zero Wiki](https://github.com/pannal/Sub-Zero.bundle/wiki)**
 
 ## Changelog
 
+1.4.27.965
+- core: on_playback activity bugfixes
 
-1.4.23.920
-- core: handle undecodable paths better #255
-- core: don't fail on unrecoverable data #257
-- core: increase default scores from 110 (series) and 23 (movies) to 116 and 33
-- core: fix global subtitle folder handling #234
-- core: better invoking of configured executable after subtitle addition #247
+
+1.4.27.957
+- core: correctly fall back to the next best subtitle if the current one couldn't be downloaded; hopefully fixes #231
+- core: add "Scan: which external subtitles should be picked up?"-setting
+- core: add optional on_playing activities. refresh currently playing movie, refresh next episode in season, both or none; fixes #259 #33
+- core: skip to next best subtitle if findbettersubtitles failed
+- core: add setting to treat undefined-language embedded subtitle as configured language1 #239
+- core: fix handling of inexistant addic7ed show id
+- core: fix regression issue breaking relative custom subtitle folder handling
+- core: fix loading of stored subtitle info data of now-non-existant items
+- core: re-add separate global subtitle folder handling
+- menu: remove obsolete actions from the advanced menu
 
 
 [older changes](CHANGELOG.md)
