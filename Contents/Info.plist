@@ -9,11 +9,11 @@
         <key>CFBundleInfoDictionaryVersion</key>
         <string>6.0</string>
         <key>CFBundleShortVersionString</key>
-        <string>1.4.27</string>
+        <string>2.0.24</string>
         <key>CFBundleSignature</key>
         <string>????</string>
         <key>CFBundleVersion</key>
-        <string>1.4.27.980</string>
+        <string>2.0.24.1565</string>
         <key>PlexFrameworkVersion</key>
         <string>2</string>
         <key>PlexPluginClass</key>
@@ -32,7 +32,7 @@
 
 &lt;h1&gt;Sub-Zero for Plex&lt;/h1&gt;&lt;i&gt;Subtitles done right&lt;/i&gt;
 
-Version 1.4.27.980
+Version 2.0.24.1565
 
 Originally based on @bramwalet's awesome &lt;a href=&quot;https://github.com/bramwalet/Subliminal.bundle&quot;&gt;Subliminal.bundle&lt;/a&gt;
 
@@ -44,7 +44,7 @@ Score info: &lt;a href=&quot;http://v.ht/szscores&quot;&gt;http://v.ht/szscores&
 Plex thread: &lt;a href=&quot;https://forums.plex.tv/discussion/186575&quot;>https://forums.plex.tv/discussion/186575&lt;/a&gt;
 Github: &lt;a href=&quot;https://github.com/pannal/Sub-Zero.bundle&quot;&gt;https://github.com/pannal/Sub-Zero&lt;/a&gt;
 
-panni, 2016
+panni, 2017
 &lt;/div&gt;
 	</string>
     </dict>
