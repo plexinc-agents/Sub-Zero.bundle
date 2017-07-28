@@ -34,8 +34,6 @@ IGNORE_FN = ("subzero.ignore", ".subzero.ignore", ".nosz")
 VERSION_RE = re.compile(ur'CFBundleVersion.+?<string>([0-9\.]+)</string>', re.DOTALL)
 DEV_RE = re.compile(ur'PlexPluginDevMode.+?<string>([01]+)</string>', re.DOTALL)
 
-impawrt = getattr(sys.modules['__main__'], "__builtins__").get("__import__")
-
 
 def int_or_default(s, default):
     try:
@@ -118,6 +116,8 @@ class Config(object):
 
         os.environ["SZ_USER_AGENT"] = self.get_user_agent()
 
+        self.providers = self.get_providers()
+
         self.set_plugin_mode()
         self.set_plugin_lock()
         self.set_activity_modes()
@@ -126,7 +126,6 @@ class Config(object):
         self.subtitle_destination_folder = self.get_subtitle_destination_folder()
         self.subtitle_formats = self.get_subtitle_formats()
         self.forced_only = cast_bool(Prefs["subtitles.only_foreign"])
-        self.providers = self.get_providers()
         self.provider_settings = self.get_provider_settings()
         self.max_recent_items_per_library = int_or_default(Prefs["scheduler.max_recent_items_per_library"], 2000)
         self.sections = list(Plex["library"].sections())
@@ -152,10 +151,15 @@ class Config(object):
 
     def init_libraries(self):
         if Core.runtime.os == "Windows":
-            unrar_exe = os.path.abspath(os.path.join(self.libraries_root, "Windows", "generic", "UnRAR", "UnRAR.exe"))
+            unrar_exe = os.path.abspath(os.path.join(self.libraries_root, "Windows", "i386", "UnRAR", "UnRAR.exe"))
             if os.path.isfile(unrar_exe):
                 rarfile.UNRAR_TOOL = unrar_exe
                 Log.Info("Using UnRAR from: %s", unrar_exe)
+
+        custom_unrar = os.environ.get("SZ_UNRAR_TOOL")
+        if custom_unrar and os.path.isfile(custom_unrar):
+            rarfile.UNRAR_TOOL = custom_unrar
+            Log.Info("Using UnRAR from: %s", custom_unrar)
 
     def init_cache(self):
         names = ['dbhash', 'gdbm', 'dbm']
@@ -163,27 +167,34 @@ class Config(object):
         self.dbm_supported = False
 
         # try importing dbm modules
-        if impawrt:
-            for name in names:
-                try:
-                    impawrt(name)
-                except:
-                    continue
-                if not self.dbm_supported:
-                    self.dbm_supported = name
-                    break
+        if Core.runtime.os != "Windows":
+            impawrt = None
+            try:
+                impawrt = getattr(sys.modules['__main__'], "__builtins__").get("__import__")
+            except:
+                pass
 
-            if self.dbm_supported:
-                # anydbm checks; try guessing the format and importing the correct module
-                dbfn = os.path.join(config.data_items_path, 'subzero.dbm')
-                db_which = whichdb(dbfn)
-                if db_which is not None and db_which != "":
+            if impawrt:
+                for name in names:
                     try:
-                        impawrt(db_which)
-                    except ImportError:
-                        self.dbm_supported = False
+                        impawrt(name)
+                    except:
+                        continue
+                    if not self.dbm_supported:
+                        self.dbm_supported = name
+                        break
 
-        if Core.runtime.os != "Windows" and self.dbm_supported:
+                if self.dbm_supported:
+                    # anydbm checks; try guessing the format and importing the correct module
+                    dbfn = os.path.join(config.data_items_path, 'subzero.dbm')
+                    db_which = whichdb(dbfn)
+                    if db_which is not None and db_which != "":
+                        try:
+                            impawrt(db_which)
+                        except ImportError:
+                            self.dbm_supported = False
+
+        if self.dbm_supported:
             try:
                 subliminal.region.configure('dogpile.cache.dbm', expiration_time=datetime.timedelta(days=30),
                                             arguments={'filename': dbfn,
@@ -220,11 +231,21 @@ class Config(object):
             except:
                 Log.Warn("Couldn't determine Plex Token")
         else:
-            Log("Did NOT find Preferences file - most likely Windows OS. Otherwise please check logfile and hierarchy.")
+            Log.Warn("Did NOT find Preferences file - most likely Windows OS. Otherwise please check logfile and hierarchy.")
 
         # fixme: windows
 
     def set_plugin_mode(self):
+        self.enable_agent = True
+        self.enable_channel = True
+
+        # any provider enabled?
+        if not self.providers:
+            self.enable_agent = False
+            self.enable_channel = False
+            Log.Warn("No providers enabled, disabling agent and channel!")
+            return
+
         if Prefs["plugin_mode"] == "only agent":
             self.enable_channel = False
         elif Prefs["plugin_mode"] == "only channel":

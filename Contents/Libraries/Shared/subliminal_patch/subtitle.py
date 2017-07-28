@@ -14,7 +14,7 @@ from pysubs2 import SSAStyle
 from pysubs2.subrip import parse_tags, MAX_REPRESENTABLE_TIME
 from pysubs2.time import ms_to_times
 from subzero.modification import SubtitleModifications
-from subliminal import Subtitle
+from subliminal import Subtitle as Subtitle_
 from ftfy import fix_text
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ ftfy_defaults = {
 }
 
 
-class PatchedSubtitle(Subtitle):
+class Subtitle(Subtitle_):
     storage_path = None
     release_info = None
     matches = None
@@ -40,8 +40,8 @@ class PatchedSubtitle(Subtitle):
     _guessed_encoding = None
 
     def __init__(self, language, hearing_impaired=False, page_link=None, encoding=None, mods=None):
-        super(PatchedSubtitle, self).__init__(language, hearing_impaired=hearing_impaired, page_link=page_link,
-                                              encoding=encoding)
+        super(Subtitle, self).__init__(language, hearing_impaired=hearing_impaired, page_link=page_link,
+                                       encoding=encoding)
         self.mods = mods
 
     def __repr__(self):
@@ -120,16 +120,19 @@ class PatchedSubtitle(Subtitle):
                               'mac_greek'])
 
         # Polish, Czech, Slovak, Hungarian, Slovene, Bosnian, Croatian, Serbian (Latin script),
-        # Romanian (before 1993 spelling reform) and Albanian
+        # Romanian and Albanian
         elif self.language.alpha3 in ('pol', 'cze', 'ces', 'slk', 'slo', 'slv', 'hun', 'bos', 'hbs', 'hrv', 'rsb',
                                       'ron', 'rum', 'sqi', 'alb'):
+
+            encodings.extend(['iso-8859-2', 'windows-1250'])
+
             # Eastern European Group 1
             if self.language.alpha3 == "slv":
                 encodings.append('iso-8859-4')
 
-            elif self.language.alpha3 in ("ron", "rum", "sqi", "alb"):
-                encodings.extend(['windows-1252', 'iso-8859-1', 'iso-8859-9', 'iso-8859-15'])
-            encodings.extend(['windows-1250', 'iso-8859-2'])
+            # Albanian
+            elif self.language.alpha3 in ("sqi", "alb"):
+                encodings.extend(['windows-1252', 'iso-8859-15', 'iso-8859-1', 'iso-8859-9'])
 
         # Bulgarian, Serbian and Macedonian, Ukranian and Russian
         elif self.language.alpha3 in ('bul', 'srp', 'mkd', 'mac', 'rus', 'ukr'):
@@ -288,11 +291,12 @@ class PatchedSubtitle(Subtitle):
             return fix_text(self.content.decode("utf-8"), **ftfy_defaults)
 
         submods = SubtitleModifications(debug=debug)
-        submods.load(content=self.text, language=self.language)
-        submods.modify(*self.mods)
+        if submods.load(content=self.text, language=self.language):
+            submods.modify(*self.mods)
 
-        return fix_text(self.pysubs2_to_unicode(submods.f, format=format), **ftfy_defaults).encode(encoding="utf-8")
+            return fix_text(self.pysubs2_to_unicode(submods.f, format=format), **ftfy_defaults).encode(encoding="utf-8")
+        return None
 
 
-class ModifiedSubtitle(PatchedSubtitle):
+class ModifiedSubtitle(Subtitle):
     id = None

@@ -3,7 +3,7 @@ import os
 
 from sub_mod import SubtitleModificationsMenu
 from menu_helpers import debounce, SubFolderObjectContainer, default_thumb, add_ignore_options, get_item_task_data, \
-    set_refresh_menu_state
+    set_refresh_menu_state, route
 
 from refresh_item import RefreshItem
 from subzero.constants import PREFIX
@@ -136,6 +136,7 @@ def ItemDetailsMenu(rating_key, title=None, base_title=None, item_title=None, ra
                     ))
 
     add_ignore_options(oc, "videos", title=item_title, rating_key=rating_key, callback_menu=IgnoreMenu)
+    subtitle_storage.destroy()
 
     return oc
 
@@ -169,6 +170,8 @@ def SubtitleOptionsMenu(**kwargs):
             title=u"Modify %s subtitle" % kwargs["language_name"],
             summary=u"Currently applied mods: %s" % (", ".join(current_sub.mods) if current_sub.mods else "none")
         ))
+
+    storage.destroy()
     return oc
 
 
@@ -289,5 +292,7 @@ def TriggerDownloadSubtitle(rating_key=None, subtitle_id=None, item_title=None, 
 
     else:
         scheduler.dispatch_task("DownloadSubtitleForItem", rating_key=rating_key, subtitle=download_subtitle)
+
+    scheduler.clear_task_data("AvailableSubsForItem")
 
     return fatality(randomize=timestamp(), header=" ", replace_parent=True)

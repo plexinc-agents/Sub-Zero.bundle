@@ -188,5 +188,7 @@ class PodnapisiProvider(_PodnapisiProvider):
             # increment current page
             params['page'] = int(xml.find('pagination/current').text) + 1
             logger.debug('Getting page %d', params['page'])
+            xml.decompose()
+            xml = None
 
         return subtitles

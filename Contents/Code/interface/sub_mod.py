@@ -5,7 +5,7 @@ import types
 
 from babelfish import Language
 
-from menu_helpers import debounce, SubFolderObjectContainer, default_thumb
+from menu_helpers import debounce, SubFolderObjectContainer, default_thumb, route
 from subzero.modification import registry as mod_registry, SubtitleModifications
 from subzero.constants import PREFIX
 from support.plex_media import get_plex_metadata, scan_videos
@@ -81,6 +81,8 @@ def SubtitleModificationsMenu(**kwargs):
         title=pad_title("Restore original version"),
         summary=u"Currently applied mods: %s" % (", ".join(current_mods) if current_mods else "none")
     ))
+
+    storage.destroy()
 
     return oc
 
@@ -247,5 +249,7 @@ def SubtitleListMods(**kwargs):
             key=Callback(SubtitleSetMods, mods=identifier, mode="remove", randomize=timestamp(), **kwargs),
             title="Remove: %s" % identifier
         ))
+
+    storage.destroy()
 
     return oc
