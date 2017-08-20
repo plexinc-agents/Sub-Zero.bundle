@@ -10,7 +10,10 @@ import datetime
 
 import subliminal
 import subliminal_patch
+import subzero.constants
+import lib
 
+from subliminal_patch.core import is_windows_special_path
 from whichdb import whichdb
 from babelfish import Language
 from subliminal.cli import MutexLock
@@ -18,7 +21,7 @@ from subzero.lib.io import FileIO, get_viable_encoding
 from subzero.util import get_root_path
 from subzero.constants import PLUGIN_NAME, PLUGIN_IDENTIFIER, MOVIE, SHOW, MEDIA_TYPE_TO_STRING
 from lib import Plex
-from helpers import check_write_permissions, cast_bool
+from helpers import check_write_permissions, cast_bool, cast_int
 
 SUBTITLE_EXTS = ['utf', 'utf8', 'utf-8', 'srt', 'smi', 'rt', 'ssa', 'aqt', 'jss', 'ass', 'idx', 'sub', 'txt', 'psb',
                  'vtt']
@@ -56,6 +59,8 @@ class Config(object):
     plex_token = None
     is_development = False
     dbm_supported = False
+    pms_request_timeout = 15
+    low_impact_mode = False
 
     enable_channel = True
     enable_agent = True
@@ -102,6 +107,10 @@ class Config(object):
         self.libraries_root = os.path.abspath(os.path.join(get_root_path(), ".."))
         self.init_libraries()
 
+        if is_windows_special_path:
+            Log.Warn("The Plex metadata folder is residing inside a folder with special characters. "
+                     "Multithreading and playback activities will be disabled.")
+
         self.fs_encoding = get_viable_encoding()
         self.plugin_info = self.get_plugin_info()
         self.is_development = self.get_dev_mode()
@@ -113,6 +122,9 @@ class Config(object):
         self.data_items_path = os.path.join(self.data_path, "DataItems")
         self.universal_plex_token = self.get_universal_plex_token()
         self.plex_token = os.environ.get("PLEXTOKEN", self.universal_plex_token)
+        subzero.constants.DEFAULT_TIMEOUT = lib.DEFAULT_TIMEOUT = self.pms_request_timeout = \
+            min(cast_int(Prefs['pms_request_timeout'], 15), 45)
+        self.low_impact_mode = cast_bool(Prefs['low_impact_mode'])
 
         os.environ["SZ_USER_AGENT"] = self.get_user_agent()
 
@@ -406,17 +418,23 @@ class Config(object):
 
     # Prepare a list of languages we want subs for
     def get_lang_list(self):
-        l = {Language.fromietf(Prefs["langPref1"])}
+        l = {Language.fromietf(Prefs["langPref1a"])}
         lang_custom = Prefs["langPrefCustom"].strip()
 
         if Prefs['subtitles.only_one']:
             return l
 
-        if Prefs["langPref2"] != "None":
-            l.update({Language.fromietf(Prefs["langPref2"])})
+        if Prefs["langPref2a"] != "None":
+            try:
+                l.update({Language.fromietf(Prefs["langPref2a"])})
+            except:
+                pass
 
-        if Prefs["langPref3"] != "None":
-            l.update({Language.fromietf(Prefs["langPref3"])})
+        if Prefs["langPref3a"] != "None":
+            try:
+                l.update({Language.fromietf(Prefs["langPref3a"])})
+            except:
+                pass
 
         if len(lang_custom) and lang_custom != "None":
             for lang in lang_custom.split(u","):
@@ -454,12 +472,13 @@ class Config(object):
         providers = {'opensubtitles': cast_bool(Prefs['provider.opensubtitles.enabled']),
                      # 'thesubdb': Prefs['provider.thesubdb.enabled'],
                      'podnapisi': cast_bool(Prefs['provider.podnapisi.enabled']),
+                     'titlovi': cast_bool(Prefs['provider.titlovi.enabled']),
                      'addic7ed': cast_bool(Prefs['provider.addic7ed.enabled']),
                      'tvsubtitles': cast_bool(Prefs['provider.tvsubtitles.enabled']),
                      'legendastv': cast_bool(Prefs['provider.legendastv.enabled']),
                      'napiprojekt': cast_bool(Prefs['provider.napiprojekt.enabled']),
                      'shooter': cast_bool(Prefs['provider.shooter.enabled']),
-                     'subscenter': cast_bool(Prefs['provider.subscenter.enabled']),
+                     'subscenter': False,
                      }
 
         # ditch non-forced-subtitles-reporting providers
@@ -469,6 +488,7 @@ class Config(object):
             providers["legendastv"] = False
             providers["napiprojekt"] = False
             providers["shooter"] = False
+            providers["titlovi"] = False
             providers["subscenter"] = False
 
         return filter(lambda prov: providers[prov], providers)
@@ -488,9 +508,6 @@ class Config(object):
                              },
                              'legendastv': {'username': Prefs['provider.legendastv.username'],
                                             'password': Prefs['provider.legendastv.password'],
-                                            },
-                             'subscenter': {'username': Prefs['provider.subscenter.username'],
-                                            'password': Prefs['provider.subscenter.password'],
                                             },
                              }
 

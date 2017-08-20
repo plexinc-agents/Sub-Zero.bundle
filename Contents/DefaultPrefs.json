@@ -1,6 +1,6 @@
 [
   {
-    "id": "langPref1",
+    "id": "langPref1a",
     "label": "Subtitle Language (1)",
     "type": "enum",
     "values": [
@@ -55,7 +55,7 @@
     "default": "en"
   },
   {
-    "id": "langPref2",
+    "id": "langPref2a",
     "label": "Subtitle Language (2)",
     "type": "enum",
     "values": [
@@ -111,7 +111,7 @@
     "default": "None"
   },
   {
-    "id": "langPref3",
+    "id": "langPref3a",
     "label": "Subtitle Language (3)",
     "type": "enum",
     "values": [
@@ -223,6 +223,12 @@
     "default": "true"
   },
   {
+    "id": "provider.titlovi.enabled",
+    "label": "Provider: Enable Titlovi.com",
+    "type": "bool",
+    "default": "true"
+  },
+  {
     "id": "provider.addic7ed.enabled",
     "label": "Provider: Enable Addic7ed",
     "type": "bool",
@@ -316,26 +322,6 @@
     "label": "Provider: Enable Shooter.cn (Chinese)",
     "type": "bool",
     "default": "false"
-  },
-  {
-    "id": "provider.subscenter.enabled",
-    "label": "Provider: Enable SubsCenter (Hebrew)",
-    "type": "bool",
-    "default": "false"
-  },
-  {
-    "id": "provider.subscenter.username",
-    "label": "SubsCenter Username",
-    "type": "text",
-    "default": ""
-  },
-  {
-    "id": "provider.subscenter.password",
-    "label": "SubsCenter Password",
-    "type": "text",
-    "option": "hidden",
-    "default": "",
-    "secure": "true"
   },
   {
     "id": "providers.multithreading",
@@ -664,6 +650,18 @@
     "label": "Check for correct folder permissions of every library on plugin start",
     "type": "bool",
     "default": "true"
+  },
+  {
+    "id": "low_impact_mode",
+    "label": "Low impact mode (for remote filesystems)",
+    "type": "bool",
+    "default": "false"
+  },
+  {
+    "id": "pms_request_timeout",
+    "label": "Timeout for API requests sent to the PMS",
+    "type": "text",
+    "default": "15"
   },
   {
     "id": "log_level",
