@@ -70,7 +70,21 @@ For further help or manual installation, [please go to the wiki](https://github.
 
 ## Changelog
 
+2.0.26.1715
+- core: submod: OCR fixes: swe: replace ĺ with å inside words
+- core: fix handling of non-existant PMS audio_codec info
+- core: filename matching ignored the strictness setting in certain global directory configurations (thanks @raduc)
+- core: don't fail on migration errors
+- provider titlovi: handle multiple subtitles per archive
+- provider addic7ed: reset default boost to 19 (was 21)
+- menu: add warning icon on missing permissions
+- menu: manual subtitle list sometimes listed duplicates (thanks @andreashoyer)
+- menu: don't request PMS metadata in item details menu twice
+- menu: don't fail badly on non existant PMS metadata in item details menu
+
+
 2.0.26.1695
+## ATTENTION: THIS RELEASE RESETS YOUR CONFIGURED LANGUAGES TO DEFAULT!
 - core: fix bug that caused SZ not to work for Windows users with special characters in their username
 - core: fix issues when logging failed manual download actions
 - core: update guessit to 2.1.4
@@ -86,26 +100,10 @@ For further help or manual installation, [please go to the wiki](https://github.
 - submod: OCR: update eng and hrv OCR replace dictionaries; fix ". L am huge"
 
 
-2.0.25.1635
-- core: update memory handling, possibly reduce memory problems of 2.0
-- core: support for MPL2 subtitle format
-- core: update task handling
-- core: re-enable NVIDIA SHIELD support by fixing rarfile behaviour
-- core: add SZ_UNRAR_TOOL environment variable for custom unrar location
-- core: disable SZ when no providers are enabled
-- core: only start activity monitor if channel or agent are enabled
-- core: improve custom provider integration
-- core: update eastern european encoding detection (especially Romanian)
-- tasks: reduce provider stress by introducing wait times between searches/downloads
-- windows: correctly ship UnRAR.exe
-- windows: skip DBM checks
-- addic7ed: fix Nip/Tuck
-- subscenter: use new domain
-
 
 Big thanks to the beta testing team! You know who you are!
 
 [older changes](CHANGELOG.md)
 
 
-Subtitles provided by [OpenSubtitles.org](http://www.opensubtitles.org/), [Podnapisi.NET](https://www.podnapisi.net/), [TVSubtitles.net](http://www.tvsubtitles.net/), [Addic7ed.com](http://www.addic7ed.com/), [Legendas TV](http://legendas.tv/), [Napi Projekt](http://www.napiprojekt.pl/), [Shooter](http://shooter.cn/), [SubsCenter](http://www.subscenter.org)
+Subtitles provided by [OpenSubtitles.org](http://www.opensubtitles.org/), [Podnapisi.NET](https://www.podnapisi.net/), [TVSubtitles.net](http://www.tvsubtitles.net/), [Addic7ed.com](http://www.addic7ed.com/), [Legendas TV](http://legendas.tv/), [Napi Projekt](http://www.napiprojekt.pl/), [Shooter](http://shooter.cn/), [Titlovi](http://titlovi.com)
