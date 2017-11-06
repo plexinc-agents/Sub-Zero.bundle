@@ -473,7 +473,7 @@ class StoredSubtitlesManager(object):
             # new style data
             subs_for_video = JSONStoredVideoSubtitles()
             try:
-                with gzip.open(json_path, 'rb') as f:
+                with gzip.open(json_path, 'rb', compresslevel=6) as f:
                     s = f.read()
 
                 data = loads(s)
@@ -514,20 +514,23 @@ class StoredSubtitlesManager(object):
 
         return subs_for_video
 
-    def load_or_new(self, plex_item):
+    def load_or_new(self, plex_item, save=False):
         subs_for_video = self.load(plex_item.rating_key)
         if not subs_for_video:
             subs_for_video = JSONStoredVideoSubtitles()
             subs_for_video.initialize(plex_item, version=self.version)
-            self.save(subs_for_video)
+            if save:
+                self.save(subs_for_video)
         return subs_for_video
 
     def save(self, subs_for_video):
         data = subs_for_video.serialize()
+        temp_fn = self.get_json_data_path(self.get_storage_filename(subs_for_video.video_id) + "_tmp")
         fn = self.get_json_data_path(self.get_storage_filename(subs_for_video.video_id))
         json_data = str(dumps(data, ensure_ascii=False))
-        with gzip.open(fn, "wb", compresslevel=6) as f:
+        with gzip.open(temp_fn, "wb", compresslevel=6) as f:
             f.write(json_data)
+        os.rename(temp_fn, fn)
 
     def delete(self, filename):
         os.remove(filename)
