@@ -40,8 +40,9 @@ class CommonFixes(SubtitleTextModification):
         # no space after starting dash
         NReProcessor(re.compile(r'(?u)^-(?![\s-])'), "- ", name="CM_dash_space"),
 
-        # remove starting spaced dots (not matching ellipses
-        NReProcessor(re.compile(r'(?u)^(?!\s?(\.\s\.\s\.)|(\s?\.{3}))[\s.]*'), "", name="CM_starting_spacedots"),
+        # remove starting spaced dots (not matching ellipses)
+        NReProcessor(re.compile(r'(?u)^(?!\s?(\.\s\.\s\.)|(\s?\.{3}))(?=\.+\s+)[\s.]*'), "",
+                     name="CM_starting_spacedots"),
 
         # space missing before doublequote
         # ReProcessor(re.compile(r'(?u)(?<!^)(?<![\s(\["])("[^"]+")'), r' \1', name="CM_space_before_dblquote"),
@@ -69,6 +70,11 @@ class CommonFixes(SubtitleTextModification):
         # uppercase after dot
         NReProcessor(re.compile(ur'(?u)((?:[^.\s])+\.\s+)([a-zà-ž])'),
                      lambda match: ur'%s%s' % (match.group(1), match.group(2).upper()), name="CM_uppercase_after_dot"),
+
+        # remove double interpunction
+        NReProcessor(re.compile(ur'(?u)(\s*[,!?])\s*([,.!?][,.!?\s]*)'),
+                     lambda match: match.group(1).strip() + (" " if match.group(2).endswith(" ") else ""),
+                     name="CM_double_interpunct"),
 
         # remove spaces before punctuation
         NReProcessor(re.compile(r'(?u)(?:(?<=^)|(?<=\w)) +([!?.,](?![!?.,]))'), r"\1", name="CM_punctuation_space"),
