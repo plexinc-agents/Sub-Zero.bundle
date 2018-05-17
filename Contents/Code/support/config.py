@@ -136,6 +136,7 @@ class Config(object):
     embedded_auto_extract = False
     ietf_as_alpha3 = False
     unrar = None
+    adv_cfg_path = None
 
     store_recently_played_amount = 40
 
@@ -313,15 +314,23 @@ class Config(object):
         return pack_cache_dir
 
     def get_advanced_config(self):
+        paths = []
         if Prefs['path_to_advanced_settings']:
-            path = Prefs['path_to_advanced_settings']
-        else:
-            path = os.path.join(config.data_path, "advanced_settings.json")
+            paths = [
+                Prefs['path_to_advanced_settings'],
+                os.path.join(Prefs['path_to_advanced_settings'], "advanced_settings.json")
+            ]
 
-        if os.path.isfile(path):
-            data = FileIO.read(path, "r")
+        paths.append(os.path.join(config.data_path, "advanced_settings.json"))
 
-            return Dicked(**jstyleson.loads(data))
+        for path in paths:
+            if os.path.isfile(path):
+                data = FileIO.read(path, "r")
+
+                d = Dicked(**jstyleson.loads(data))
+                self.adv_cfg_path = path
+                Log.Info(u"Using advanced settings from: %s", path)
+                return d
 
         return Dicked()
 
