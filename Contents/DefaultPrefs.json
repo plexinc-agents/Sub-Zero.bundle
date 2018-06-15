@@ -50,7 +50,9 @@
       "tr",
       "uk",
       "vi",
-      "hr"
+      "hr",
+      "zh-hans",
+      "zh-hant"
     ],
     "default": "en"
   },
@@ -106,7 +108,9 @@
       "tr",
       "uk",
       "vi",
-      "hr"
+      "hr",
+      "zh-hans",
+      "zh-hant"
     ],
     "default": "None"
   },
@@ -162,7 +166,9 @@
       "tr",
       "uk",
       "vi",
-      "hr"
+      "hr",
+      "zh-hans",
+      "zh-hant"
     ],
     "default": "None"
   },
@@ -381,6 +387,12 @@
     "default": "true"
   },
   {
+    "id": "provider.supersubtitles.enabled",
+    "label": "Provider: Enable feliratok.info (Hungarian)",
+    "type": "bool",
+    "default": "false"
+  },
+  {
     "id": "provider.hosszupuska.enabled",
     "label": "Provider: Enable hosszupuskasub.com (Hungarian)",
     "type": "bool",
@@ -391,6 +403,18 @@
     "label": "Provider: Enable aRGENTeaM (Spanish)",
     "type": "bool",
     "default": "false"
+  },
+  {
+    "id": "provider.assrt.enabled",
+    "label": "Provider: Enable assrt.net (Chinese)",
+    "type": "bool",
+    "default": "false"
+  },
+  {
+    "id": "provider.assrt.token",
+    "label": "Assrt API Token",
+    "type": "text",
+    "default": ""
   },
   {
     "id": "providers.multithreading",
@@ -709,15 +733,15 @@
     "default": ""
   },
   {
-    "id": "plugin_mode",
+    "id": "plugin_mode2",
     "label": "Sub-Zero mode",
     "type": "enum",
     "values": [
-      "agent + channel",
+      "agent + interface",
       "only agent",
-      "only channel"
+      "only interface"
     ],
-    "default": "agent + channel"
+    "default": "agent + interface"
   },
   {
     "id": "plugin_pin",
@@ -734,12 +758,12 @@
     "default": "10"
   },
   {
-    "id": "plugin_pin_mode",
+    "id": "plugin_pin_mode2",
     "label": "Use PIN to restrict access to (needs plugin or PMS restart)",
     "type": "enum",
     "values": [
       "disabled",
-      "channel menu",
+      "interface",
       "advanced menu"
     ],
     "default": "disabled"

@@ -13,6 +13,12 @@ import lib
 
 sys.modules["support.lib"] = lib
 
+import i18n
+
+sys.modules["support.i18n"] = i18n
+
+helpers._ = i18n._
+
 import plex_media
 sys.modules["support.plex_media"] = plex_media
 

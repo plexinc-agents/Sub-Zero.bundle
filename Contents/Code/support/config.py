@@ -12,7 +12,7 @@ import subliminal
 import subliminal_patch
 import subzero.constants
 import lib
-from subliminal.exceptions import ServiceUnavailable, DownloadLimitExceeded
+from subliminal.exceptions import ServiceUnavailable, DownloadLimitExceeded, AuthenticationError
 
 from subliminal_patch.core import is_windows_special_path
 from whichdb import whichdb
@@ -69,7 +69,8 @@ PROVIDER_THROTTLE_MAP = {
         DownloadLimitExceeded: (datetime.timedelta(hours=6), "6 hours"),
     },
     "addic7ed": {
-        DownloadLimitExceeded: (datetime.timedelta(hours=24), "24 hours"),
+        DownloadLimitExceeded: (datetime.timedelta(hours=3), "3 hours"),
+        TooManyRequests: (datetime.timedelta(minutes=5), "5 minutes"),
     }
 }
 
@@ -93,6 +94,7 @@ class Config(object):
     new_style_cache = False
     pack_cache_dir = None
     advanced = None
+    debug_i18n = False
 
     enable_channel = True
     enable_agent = True
@@ -167,6 +169,7 @@ class Config(object):
         self.new_style_cache = cast_bool(Prefs['new_style_cache'])
         self.pack_cache_dir = self.get_pack_cache_dir()
         self.advanced = self.get_advanced_config()
+        self.debug_i18n = self.advanced.debug_i18n
 
         os.environ["SZ_USER_AGENT"] = self.get_user_agent()
 
@@ -373,16 +376,16 @@ class Config(object):
         if not self.providers:
             self.enable_agent = False
             self.enable_channel = False
-            Log.Warn("No providers enabled, disabling agent and channel!")
+            Log.Warn("No providers enabled, disabling agent and interface!")
             return
 
-        if Prefs["plugin_mode"] == "only agent":
+        if Prefs["plugin_mode2"] == "only agent":
             self.enable_channel = False
-        elif Prefs["plugin_mode"] == "only channel":
+        elif Prefs["plugin_mode2"] == "only interface":
             self.enable_agent = False
 
     def set_plugin_lock(self):
-        if Prefs["plugin_pin_mode"] in ("channel menu", "advanced menu"):
+        if Prefs["plugin_pin_mode2"] in ("interface", "advanced menu"):
             # check pin
             pin = Prefs["plugin_pin"]
             if not pin or not len(pin):
@@ -395,8 +398,8 @@ class Config(object):
             except ValueError:
                 Log.Warn("PIN has to be an integer (0-9)")
             self.pin = pin
-            self.lock_advanced_menu = Prefs["plugin_pin_mode"] == "advanced menu"
-            self.lock_menu = Prefs["plugin_pin_mode"] == "channel menu"
+            self.lock_advanced_menu = Prefs["plugin_pin_mode2"] == "advanced menu"
+            self.lock_menu = Prefs["plugin_pin_mode2"] == "interface"
 
             try:
                 self.pin_valid_minutes = int(Prefs["plugin_pin_valid_for"].strip())
@@ -502,12 +505,30 @@ class Config(object):
         if not fn:
             return
 
-        splitted_fn = fn.split()
-        exe_fn = splitted_fn[0]
-        arguments = [arg.strip() for arg in splitted_fn[1:]]
+        got_args = "%(" in fn
+        if got_args:
+            first_arg_pos = fn.index("%(")
+            exe_fn = fn[:first_arg_pos].strip()
+            arguments = [arg.strip() for arg in fn[first_arg_pos:].split()]
+        else:
+            exe_fn = fn
+            arguments = []
 
         if os.path.isfile(exe_fn) and os.access(exe_fn, os.X_OK):
             return exe_fn, arguments
+
+        # try finding the executable itself, the path might contain spaces and there might have been other arguments
+        fn_split = exe_fn.split(u" ")
+        tmp_exe_fn = fn_split[0]
+
+        for offset in range(1, len(fn_split)+1):
+            if os.path.isfile(tmp_exe_fn) and os.access(tmp_exe_fn, os.X_OK):
+                exe_fn = tmp_exe_fn.strip()
+                arguments = [arg.strip() for arg in fn_split[offset:]] + arguments
+                return exe_fn, arguments
+
+            tmp_exe_fn = u" ".join(fn_split[:offset+1])
+
         Log.Error("Notify executable not existing or not executable: %s" % exe_fn)
 
     def refresh_enabled_sections(self):
@@ -621,10 +642,12 @@ class Config(object):
                      'legendastv': cast_bool(Prefs['provider.legendastv.enabled']),
                      'napiprojekt': cast_bool(Prefs['provider.napiprojekt.enabled']),
                      'hosszupuska': cast_bool(Prefs['provider.hosszupuska.enabled']),
+                     'supersubtitles': cast_bool(Prefs['provider.supersubtitles.enabled']),
                      'shooter': False,
                      'subscene': cast_bool(Prefs['provider.subscene.enabled']),
                      'argenteam': cast_bool(Prefs['provider.argenteam.enabled']),
                      'subscenter': False,
+                     'assrt': cast_bool(Prefs['provider.assrt.enabled']),
                      }
 
         providers_by_prefs = copy.deepcopy(providers)
@@ -641,8 +664,10 @@ class Config(object):
             providers["napiprojekt"] = False
             providers["shooter"] = False
             providers["hosszupuska"] = False
+            providers["supersubtitles"] = False
             providers["titlovi"] = False
             providers["argenteam"] = False
+            providers["assrt"] = False
 
         if not self.unrar and providers["legendastv"]:
             providers["legendastv"] = False
@@ -701,7 +726,8 @@ class Config(object):
                              },
                              'legendastv': {'username': Prefs['provider.legendastv.username'],
                                             'password': Prefs['provider.legendastv.password'],
-                                            }
+                                            },
+                             'assrt': {'token': Prefs['provider.assrt.token'], }
                              }
 
         return provider_settings
