@@ -7,7 +7,8 @@ import re
 import os
 import time
 
-from babelfish import Language, language_converters
+from babelfish import language_converters
+from subzero.language import Language
 from requests import Session
 
 from subliminal_patch.providers import Provider
@@ -180,9 +181,9 @@ class HosszupuskaProvider(Provider, ProviderSubtitleArchiveMixin):
 
                 sub_year = sub_english_name = sub_version = None
                 # Handle the case when '(' in subtitle
-                if datas[1].getText().count('(') == 2:
+                if datas[1].getText().count('(') == 1:
                     sub_english_name = re.split('s(\d{1,2})e(\d{1,2})', datas[1].getText())[3]
-                if datas[1].getText().count('(') == 3:
+                if datas[1].getText().count('(') == 2:
                     sub_year = re.findall(r"(?<=\()(\d{4})(?=\))", datas[1].getText().strip())[0]
                     sub_english_name = re.split('s(\d{1,2})e(\d{1,2})', datas[1].getText().split('(')[0])[0]
 
@@ -199,9 +200,9 @@ class HosszupuskaProvider(Provider, ProviderSubtitleArchiveMixin):
                     sub_downloadlink = datas[6].find_all('a')[1]['href']
                     sub_id = sub_downloadlink.split('=')[1].split('.')[0]
 
-                    if datas[1].getText().count('(') == 2:
+                    if datas[1].getText().count('(') == 1:
                         sub_version = datas[1].getText().split('(')[1].split(')')[0]
-                    if datas[1].getText().count('(') == 3:
+                    if datas[1].getText().count('(') == 2:
                         sub_version = datas[1].getText().split('(')[2].split(')')[0]
 
                     # One subtitle can be used for several releases
@@ -225,6 +226,7 @@ class HosszupuskaProvider(Provider, ProviderSubtitleArchiveMixin):
                 return subs
 
             time.sleep(self.multi_result_throttle)
+            return []
 
     def download_subtitle(self, subtitle):
         r = self.session.get(subtitle.page_link, timeout=10)
