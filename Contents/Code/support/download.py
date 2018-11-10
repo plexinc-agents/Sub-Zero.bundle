@@ -6,8 +6,7 @@ from subzero.language import Language
 import subliminal_patch as subliminal
 
 from support.config import config
-from support.helpers import cast_bool, audio_streams_match_languages
-from subtitlehelpers import get_subtitles_from_metadata
+from support.helpers import audio_streams_match_languages
 from subliminal_patch import compute_score
 from support.plex_media import get_blacklist_from_part_map
 from subzero.video import refine_video
@@ -15,9 +14,17 @@ from support.storage import get_pack_data, store_pack_data
 
 
 def get_missing_languages(video, part):
-    languages = set([Language.rebuild(l) for l in config.lang_list])
+    languages_list = config.get_lang_list(ordered=True)
+    languages = set(languages_list)
+    valid_langs_in_media = set()
 
-    if audio_streams_match_languages(video, list(config.lang_list)):
+    if Prefs["subtitles.when"] != "Always":
+        valid_langs_in_media = audio_streams_match_languages(video, languages_list)
+        languages = languages.difference(valid_langs_in_media)
+        if languages:
+            Log.Debug("Languages missing after taking the audio streams into account: %s" % languages)
+
+    if valid_langs_in_media and not languages:
         Log.Debug("Skipping subtitle search for %s, audio streams are in correct language(s)",
                   video)
         return set()
@@ -29,14 +36,6 @@ def get_missing_languages(video, part):
             if language.country:
                 alpha3_map[language.alpha3] = language.country
                 language.country = None
-
-    if not Prefs['subtitles.save.filesystem']:
-        # scan for existing metadata subtitles
-        meta_subs = get_subtitles_from_metadata(part)
-        for language, subList in meta_subs.iteritems():
-            if subList:
-                video.subtitle_languages.add(language)
-                Log.Debug("Found metadata subtitle %s for %s", language, video)
 
     have_languages = video.subtitle_languages.copy()
     if config.ietf_as_alpha3:
