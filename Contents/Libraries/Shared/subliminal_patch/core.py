@@ -493,7 +493,7 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
         raise ValueError('%r is not a valid video extension' % os.path.splitext(path)[1])
 
     dirpath, filename = os.path.split(path)
-    logger.info('Scanning video %r in %r', filename, dirpath)
+    logger.info('Determining basic video properties for %r in %r', filename, dirpath)
 
     # hint guessit the filename itself and its 2 parent directories if we're an episode (most likely
     # Series name/Season/filename), else only one
@@ -514,7 +514,8 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
 
     # guess
     hints["single_value"] = True
-    hints["expected_title"] = [hints["title"]]
+    if "title" in hints:
+        hints["expected_title"] = [hints["title"]]
 
     guessed_result = guessit(guess_from, options=hints)
     logger.debug('GuessIt found: %s', json.dumps(guessed_result, cls=GuessitEncoder, indent=4, ensure_ascii=False))
