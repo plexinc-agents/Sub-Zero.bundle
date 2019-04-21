@@ -16,7 +16,8 @@ from pysubs2.subrip import parse_tags, MAX_REPRESENTABLE_TIME
 from pysubs2.time import ms_to_times
 from subzero.modification import SubtitleModifications
 from subliminal import Subtitle as Subtitle_
-from subliminal.subtitle import Episode, Movie, sanitize_release_group, sanitize, get_equivalent_release_groups
+from subliminal.subtitle import Episode, Movie, sanitize_release_group, get_equivalent_release_groups
+from subliminal_patch.utils import sanitize
 from ftfy import fix_text
 
 logger = logging.getLogger(__name__)
@@ -38,17 +39,21 @@ class Subtitle(Subtitle_):
     plex_media_fps = None
     skip_wrong_fps = False
     wrong_fps = False
+    wrong_series = False
+    wrong_season_ep = False
     is_pack = False
     asked_for_release_group = None
     asked_for_episode = None
 
     pack_data = None
     _guessed_encoding = None
+    _is_valid = False
 
     def __init__(self, language, hearing_impaired=False, page_link=None, encoding=None, mods=None):
         super(Subtitle, self).__init__(language, hearing_impaired=hearing_impaired, page_link=page_link,
                                        encoding=encoding)
         self.mods = mods
+        self._is_valid = False
 
     def __repr__(self):
         return '<%s %r [%s:%s]>' % (
@@ -212,6 +217,9 @@ class Subtitle(Subtitle_):
         :rtype: bool
 
         """
+        if self._is_valid:
+            return True
+
         text = self.text
         if not text:
             return False
@@ -222,6 +230,7 @@ class Subtitle(Subtitle_):
         except Exception:
             logger.error("PySRT-parsing failed, trying pysubs2")
         else:
+            self._is_valid = True
             return True
 
         # something else, try to return srt
@@ -247,6 +256,7 @@ class Subtitle(Subtitle_):
             logger.exception("Couldn't convert subtitle %s to .srt format: %s", self, traceback.format_exc())
             return False
 
+        self._is_valid = True
         return True
 
     @classmethod
@@ -349,8 +359,14 @@ def guess_matches(video, guess, partial=False):
     matches = set()
     if isinstance(video, Episode):
         # series
-        if video.series and 'title' in guess and sanitize(guess['title']) == sanitize(video.series):
-            matches.add('series')
+        titles = guess["title"]
+        if not isinstance(titles, types.ListType):
+            titles = [titles]
+
+        if video.series and 'title' in guess:
+            for title in titles:
+                if sanitize(title) in (sanitize(name) for name in [video.series] + video.alternative_series):
+                    matches.add('series')
         # title
         if video.title and 'episode_title' in guess and sanitize(guess['episode_title']) == sanitize(video.title):
             matches.add('title')
@@ -377,7 +393,8 @@ def guess_matches(video, guess, partial=False):
         if video.year and 'year' in guess and guess['year'] == video.year:
             matches.add('year')
         # title
-        if video.title and 'title' in guess and sanitize(guess['title']) == sanitize(video.title):
+        if video.title and 'title' in guess and sanitize(guess['title']) in (
+                    sanitize(name) for name in [video.title] + video.alternative_titles):
             matches.add('title')
 
     # release_group

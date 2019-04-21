@@ -148,6 +148,9 @@ class Config(object):
     unrar = None
     adv_cfg_path = None
     use_custom_dns = False
+    anticaptcha_token = None
+    anticaptcha_cls = None
+    has_anticaptcha = False
 
     store_recently_played_amount = 40
 
@@ -186,6 +189,11 @@ class Config(object):
         self.debug_i18n = self.advanced.debug_i18n
 
         os.environ["SZ_USER_AGENT"] = self.get_user_agent()
+        os.environ["ANTICAPTCHA_ACCOUNT_KEY"] = self.anticaptcha_token = str(Prefs["anticaptcha.api_key"]) or ""
+        acs = str(Prefs["anticaptcha.service"])
+        if acs and acs != "none":
+            os.environ["ANTICAPTCHA_CLASS"] = self.anticaptcha_cls = acs
+        self.has_anticaptcha = self.anticaptcha_token and self.anticaptcha_cls
 
         self.setup_proxies()
         self.set_plugin_mode()
@@ -329,7 +337,7 @@ class Config(object):
 
     def init_cache(self):
         if self.new_style_cache:
-            subliminal.region.configure('subzero.cache.file', expiration_time=datetime.timedelta(days=30),
+            subliminal.region.configure('subzero.cache.file', expiration_time=datetime.timedelta(days=180),
                                         arguments={'appname': "sz_cache",
                                                    'app_cache_dir': self.data_path},
                                         replace_existing_backend=True)
@@ -751,7 +759,7 @@ class Config(object):
                      # 'thesubdb': Prefs['provider.thesubdb.enabled'],
                      'podnapisi': cast_bool(Prefs['provider.podnapisi.enabled']),
                      'titlovi': cast_bool(Prefs['provider.titlovi.enabled']),
-                     'addic7ed': cast_bool(Prefs['provider.addic7ed.enabled']),
+                     'addic7ed': cast_bool(Prefs['provider.addic7ed.enabled']) and self.has_anticaptcha,
                      'tvsubtitles': cast_bool(Prefs['provider.tvsubtitles.enabled']),
                      'legendastv': cast_bool(Prefs['provider.legendastv.enabled']),
                      'napiprojekt': cast_bool(Prefs['provider.napiprojekt.enabled']),
@@ -838,7 +846,6 @@ class Config(object):
 
         provider_settings = {'addic7ed': {'username': Prefs['provider.addic7ed.username'],
                                           'password': Prefs['provider.addic7ed.password'],
-                                          'use_random_agents': cast_bool(Prefs['provider.addic7ed.use_random_agents1']),
                                           },
                              'opensubtitles': {'username': Prefs['provider.opensubtitles.username'],
                                                'password': Prefs['provider.opensubtitles.password'],
@@ -988,27 +995,37 @@ class Config(object):
             self.activity_mode = "next_episode"
 
     def get_plex_transcoder(self):
+        paths = []
         base_path = os.environ.get("PLEX_MEDIA_SERVER_HOME", None)
-        if not base_path:
-            # fall back to bundled plugins path
-            bundle_path = os.environ.get("PLEXBUNDLEDPLUGINSPATH", None)
-            if bundle_path:
-                base_path = os.path.normpath(os.path.join(bundle_path, "..", ".."))
+        if base_path:
+            paths.append(base_path)
 
+        bundle_path = os.environ.get("PLEXBUNDLEDPLUGINSPATH", None)
+        if bundle_path:
+            paths.append(os.path.normpath(os.path.join(bundle_path, "..", "..")))
+
+        paths.append(self.app_support_path)
+
+        bns = []
         if sys.platform == "darwin":
-            fn = os.path.join(base_path, "MacOS", "Plex Transcoder")
+            bns.append(("MacOS", "Plex Transcoder"))
         elif mswindows:
-            fn = os.path.join(base_path, "plextranscoder.exe")
+            bns = [("plextranscoder.exe",), ("plex transcoder.exe",)]
         else:
-            fn = os.path.join(base_path, "Plex Transcoder")
+            bns.append(("Plex Transcoder",))
 
-        if os.path.isfile(fn):
-            return fn
+        for path in paths:
+            for bn in bns:
+                fn = os.path.join(path, *bn)
 
-        # look inside Resources folder as fallback, as well
-        fn = os.path.join(base_path, "Resources", "Plex Transcoder")
-        if os.path.isfile(fn):
-            return fn
+                if os.path.isfile(fn):
+                    return fn
+
+            # look inside Resources folder as fallback, as well
+            for vbn in ("Plex Transcoder", "plextranscoder.exe", "plex transcoder.exe"):
+                fn = os.path.join(path, "Resources", vbn)
+                if os.path.isfile(fn):
+                    return fn
 
     def parse_rename_mode(self):
         # fixme: exact_filenames should be determined via callback combined with info about the current video

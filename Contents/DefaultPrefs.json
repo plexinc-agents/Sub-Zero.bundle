@@ -274,6 +274,23 @@
     "default": ""
   },
   {
+    "id": "anticaptcha.service",
+    "label": "AntiCaptcha-Service (needs paid account; enables Addic7ed, titlovi)",
+    "type": "enum",
+    "values": [
+      "none",
+      "anti-captcha.com",
+      "deathbycaptcha.com"
+    ],
+    "default": "none"
+  },
+  {
+    "id": "anticaptcha.api_key",
+    "label": "AntiCaptcha-Service key (anti-captcha.com: account_key; deathbycaptcha.com: username:password)",
+    "type": "text",
+    "default": ""
+  },
+  {
     "id": "provider.opensubtitles.enabled",
     "label": "Provider: Enable OpenSubtitles",
     "type": "bool",
@@ -306,14 +323,8 @@
     "default": "true"
   },
   {
-    "id": "provider.titlovi.enabled",
-    "label": "Provider: Enable Titlovi.com",
-    "type": "bool",
-    "default": "true"
-  },
-  {
     "id": "provider.addic7ed.enabled",
-    "label": "Provider: Enable Addic7ed",
+    "label": "Provider: Enable Addic7ed (needs AntiCaptcha)",
     "type": "bool",
     "default": "true"
   },
@@ -364,8 +375,8 @@
     "default": "19"
   },
   {
-    "id": "provider.addic7ed.use_random_agents1",
-    "label": "Addic7ed: Use random user agents",
+    "id": "provider.titlovi.enabled",
+    "label": "Provider: Enable Titlovi.com (might need AntiCaptcha)",
     "type": "bool",
     "default": "true"
   },

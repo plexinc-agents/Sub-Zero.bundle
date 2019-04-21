@@ -1,4 +1,6 @@
 # coding=utf-8
+from collections import OrderedDict
+
 import certifi
 import ssl
 import os
@@ -8,10 +10,18 @@ import requests
 import xmlrpclib
 import dns.resolver
 
-from requests import Session, exceptions
+from requests import exceptions
 from urllib3.util import connection
 from retry.api import retry_call
 from exceptions import APIThrottled
+from dogpile.cache.api import NO_VALUE
+from subliminal.cache import region
+from cfscrape import CloudflareScraper
+
+try:
+    from urlparse import urlparse
+except ImportError:
+    from urllib.parse import urlparse
 
 from subzero.lib.io import get_viable_encoding
 
@@ -30,25 +40,85 @@ custom_resolver = dns.resolver.Resolver(configure=False)
 custom_resolver.nameservers = ['8.8.8.8', '1.1.1.1']
 
 
-class CertifiSession(Session):
+class TimeoutSession(requests.Session):
     timeout = 10
 
+    def __init__(self, timeout=None):
+        super(TimeoutSession, self).__init__()
+        self.timeout = timeout or self.timeout
+
+    def request(self, method, url, *args, **kwargs):
+        if kwargs.get('timeout') is None:
+            kwargs['timeout'] = self.timeout
+
+        return super(TimeoutSession, self).request(method, url, *args, **kwargs)
+
+
+class CertifiSession(TimeoutSession):
     def __init__(self):
         super(CertifiSession, self).__init__()
         self.verify = pem_file
 
-    def request(self, *args, **kwargs):
-        if kwargs.get('timeout') is None:
-            kwargs['timeout'] = self.timeout
-        return super(CertifiSession, self).request(*args, **kwargs)
+
+class CFSession(CloudflareScraper):
+    def __init__(self):
+        super(CFSession, self).__init__()
+        self.debug = os.environ.get("CF_DEBUG", False)
+
+    def request(self, method, url, *args, **kwargs):
+        parsed_url = urlparse(url)
+        domain = parsed_url.netloc
+
+        cache_key = "cf_data2_%s" % domain
+
+        if not self.cookies.get("__cfduid", "", domain=domain):
+            cf_data = region.get(cache_key)
+            if cf_data is not NO_VALUE:
+                cf_cookies, user_agent, hdrs = cf_data
+                logger.debug("Trying to use old cf data for %s: %s", domain, cf_data)
+                for cookie, value in cf_cookies.iteritems():
+                    self.cookies.set(cookie, value, domain=domain)
+
+                self._hdrs = hdrs
+                self._ua = user_agent
+                self.headers['User-Agent'] = self._ua
+
+        ret = super(CFSession, self).request(method, url, *args, **kwargs)
+
+        try:
+            cf_data = self.get_cf_live_tokens(domain)
+        except:
+            pass
+        else:
+            if cf_data != region.get(cache_key) and cf_data[0]["__cfduid"] and cf_data[0]["cf_clearance"]:
+                logger.debug("Storing cf data for %s: %s", domain, cf_data)
+                region.set(cache_key, cf_data)
+
+        return ret
+
+    def get_cf_live_tokens(self, domain):
+        for d in self.cookies.list_domains():
+            if d.startswith(".") and d in ("." + domain):
+                cookie_domain = d
+                break
+        else:
+            raise ValueError(
+                "Unable to find Cloudflare cookies. Does the site actually have "
+                "Cloudflare IUAM (\"I'm Under Attack Mode\") enabled?")
+
+        return (OrderedDict([
+                    ("__cfduid", self.cookies.get("__cfduid", "", domain=cookie_domain)),
+                    ("cf_clearance", self.cookies.get("cf_clearance", "", domain=cookie_domain))
+                ]),
+                self._ua, self._hdrs
+        )
 
 
 class RetryingSession(CertifiSession):
     proxied_functions = ("get", "post")
 
     def __init__(self):
-        super(CertifiSession, self).__init__()
-        self.verify = pem_file
+        super(RetryingSession, self).__init__()
 
         proxy = os.environ.get('SZ_HTTP_PROXY')
         if proxy:
@@ -62,7 +132,7 @@ class RetryingSession(CertifiSession):
             # fixme: may be a little loud
             logger.debug("Using proxy %s for: %s", self.proxies["http"], args[0])
 
-        return retry_call(getattr(super(CertifiSession, self), method), fargs=args, fkwargs=kwargs, tries=3, delay=5,
+        return retry_call(getattr(super(RetryingSession, self), method), fargs=args, fkwargs=kwargs, tries=3, delay=5,
                           exceptions=(exceptions.ConnectionError,
                                       exceptions.ProxyError,
                                       exceptions.SSLError,
@@ -80,6 +150,10 @@ class RetryingSession(CertifiSession):
         if self.proxies and "timeout" in kwargs and kwargs["timeout"]:
             kwargs["timeout"] = kwargs["timeout"] * 3
         return self.retry_method("post", *args, **kwargs)
+
+
+class RetryingCFSession(RetryingSession, CFSession):
+    pass
 
 
 class SubZeroRequestsTransport(xmlrpclib.SafeTransport):
