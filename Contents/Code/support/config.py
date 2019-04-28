@@ -1,5 +1,6 @@
 # coding=utf-8
 import copy
+import json
 import os
 import re
 import inspect
@@ -143,11 +144,12 @@ class Config(object):
     refiner_settings = None
     exact_filenames = False
     only_one = False
+    any_language_is_enough = False
     embedded_auto_extract = False
     ietf_as_alpha3 = False
     unrar = None
     adv_cfg_path = None
-    use_custom_dns = False
+    use_custom_dns = None
     anticaptcha_token = None
     anticaptcha_cls = None
     has_anticaptcha = False
@@ -233,9 +235,10 @@ class Config(object):
         self.no_refresh = os.environ.get("SZ_NO_REFRESH", False)
         self.plex_transcoder = self.get_plex_transcoder()
         self.only_one = cast_bool(Prefs['subtitles.only_one'])
+        self.any_language_is_enough = Prefs['subtitles.any_language_is_enough']
         self.embedded_auto_extract = cast_bool(Prefs["subtitles.embedded.autoextract"])
         self.ietf_as_alpha3 = cast_bool(Prefs["subtitles.language.ietf_normalize"])
-        self.use_custom_dns = cast_bool(Prefs['use_custom_dns'])
+        self.use_custom_dns = self.parse_custom_dns()
         self.initialized = True
 
     def migrate_prefs(self):
@@ -1078,6 +1081,14 @@ class Config(object):
     def text_based_formats(self):
         return self.advanced.text_subtitle_formats or TEXT_SUBTITLE_EXTS
 
+    def parse_custom_dns(self):
+        custom_dns = Prefs['use_custom_dns2'].strip()
+        if custom_dns:
+            ips = filter(lambda x: x, [d.strip() for d in custom_dns.split(",")])
+            if ips:
+                os.environ["dns_resolvers"] = json.dumps(ips)
+                return os.environ["dns_resolvers"]
+
     def init_subliminal_patches(self):
         # configure custom subtitle destination folders for scanning pre-existing subs
         Log.Debug("Patching subliminal ...")
@@ -1087,9 +1098,6 @@ class Config(object):
 
         subliminal_patch.core.DOWNLOAD_TRIES = int(Prefs['subtitles.try_downloads'])
         subliminal.score.episode_scores["addic7ed_boost"] = int(Prefs['provider.addic7ed.boost_by2'])
-
-        if self.use_custom_dns:
-            subliminal_patch.http.set_custom_resolver()
 
 
 config = Config()
