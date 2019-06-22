@@ -90,38 +90,22 @@ the.vbm, mmgoodnow, Vertig0ne, thliu78, tattoomees, ostman, count_confucius, ehe
 
 ## Changelog
 
-2.6.5.3099
+2.6.5.3109
 
 subscene, addic7ed and titlovi
 - either of those providers might impose a reCAPTCHA verification. In order to use those providers, please create an account at an AntiCaptcha service ([anti-captcha.com](http://getcaptchasolution.com/kkvviom7nh) or [deathbycaptcha.com](http://deathbycaptcha.com)), add funds, then supply your credentials/apikey in the configuration
 
 Changelog
-- core: allow system DNS again by putting "system" as the DNS
-- providers: subscene: fix again (subscene, contact us please, so we can end this)
-
-
-2.6.5.3092
-
-subscene, addic7ed and titlovi
-- either of those providers might impose a reCAPTCHA verification. In order to use those providers, please create an account at an AntiCaptcha service ([anti-captcha.com](http://getcaptchasolution.com/kkvviom7nh) or [deathbycaptcha.com](http://deathbycaptcha.com)), add funds, then supply your credentials/apikey in the configuration
-
-Changelog
-- providers: subscene: fix endpoint (hopefully for longer now)
-- providers: subscene: don't search for season packs (broken for now; relieves 50% of server load on provider)
-- providers: subscene: don't calculate video fn for now
-- providers: argenteam: backport fixes from bazarr
-- subtitle: try decoding with utf-16 by default as well (zho/farsi)
-- submod: HI: remove music tags by default
-- core: compat (bazarr): add env var SZ_KEEP_ENCODING to keep encoding of subtitles
-
-
-
+- providers: add Napisy24 (polish)
+- providers: subscene: reduce provider load by possibly half
+- providers: subscene: support logging in (username/password are now required)
+- providers: subscene: fallback to non year results if none found with year
 
 
 [older changes](CHANGELOG.md)
 
 
-Subtitles provided by [OpenSubtitles.org](http://www.opensubtitles.org/), [Podnapisi.NET](https://www.podnapisi.net/), [TVSubtitles.net](http://www.tvsubtitles.net/), [Addic7ed.com](http://www.addic7ed.com/), [Legendas TV](http://legendas.tv/), [Napi Projekt](http://www.napiprojekt.pl/), [Shooter](http://shooter.cn/), [Titlovi](http://titlovi.com), [aRGENTeaM](http://argenteam.net), [SubScene](https://subscene.com/), [Hosszupuska](http://hosszupuskasub.com/)
+Subtitles provided by [OpenSubtitles.org](http://www.opensubtitles.org/), [Podnapisi.NET](https://www.podnapisi.net/), [TVSubtitles.net](http://www.tvsubtitles.net/), [Addic7ed.com](http://www.addic7ed.com/), [Legendas TV](http://legendas.tv/), [Napi Projekt](http://www.napiprojekt.pl/), [Shooter](http://shooter.cn/), [Titlovi](http://titlovi.com), [aRGENTeaM](http://argenteam.net), [SubScene](https://subscene.com/), [Hosszupuska](http://hosszupuskasub.com/), [Napisy24](https://napisy24.pl/)
 
 [3rd party licenses](https://github.com/pannal/Sub-Zero.bundle/tree/master/Licenses)
 
