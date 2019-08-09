@@ -125,7 +125,7 @@ class SubsceneProvider(Provider, ProviderSubtitleArchiveMixin):
     username = None
     password = None
 
-    search_throttle = 5  # seconds
+    search_throttle = 8  # seconds
 
     def __init__(self, only_foreign=False, username=None, password=None):
         if not all((username, password)):
@@ -138,6 +138,15 @@ class SubsceneProvider(Provider, ProviderSubtitleArchiveMixin):
     def initialize(self):
         logger.info("Creating session")
         self.session = RetryingCFSession()
+
+        prev_cookies = region.get("subscene_cookies2")
+        if prev_cookies != NO_VALUE:
+            logger.debug("Re-using old subscene cookies: %r", prev_cookies)
+            self.session.cookies.update(prev_cookies)
+
+        else:
+            logger.debug("Logging in")
+            self.login()
 
     def login(self):
         r = self.session.get("https://subscene.com/account/login")
@@ -193,12 +202,26 @@ class SubsceneProvider(Provider, ProviderSubtitleArchiveMixin):
 
     def _create_filters(self, languages):
         self.filters = dict(HearingImpaired="2")
+        acc_filters = self.filters.copy()
         if self.only_foreign:
             self.filters["ForeignOnly"] = "True"
+            acc_filters["ForeignOnly"] = self.filters["ForeignOnly"].lower()
             logger.info("Only searching for foreign/forced subtitles")
 
-        self.filters["LanguageFilter"] = ",".join((str(language_ids[l.alpha3]) for l in languages
-                                                   if l.alpha3 in language_ids))
+        selected_ids = []
+        for l in languages:
+            lid = language_ids.get(l.basename, language_ids.get(l.alpha3, None))
+            if lid:
+                selected_ids.append(str(lid))
+
+        acc_filters["SelectedIds"] = selected_ids
+        self.filters["LanguageFilter"] = ",".join(acc_filters["SelectedIds"])
+
+        last_filters = region.get("subscene_filters")
+        if last_filters != acc_filters:
+            region.set("subscene_filters", acc_filters)
+            logger.debug("Setting account filters to %r", acc_filters)
+            self.session.post("https://u.subscene.com/filter", acc_filters, allow_redirects=False)
 
         logger.debug("Filter created: '%s'" % self.filters)
 
@@ -277,20 +300,13 @@ class SubsceneProvider(Provider, ProviderSubtitleArchiveMixin):
         #     logger.debug('No release results found')
 
         # time.sleep(self.search_throttle)
-        prev_cookies = region.get("subscene_cookies2")
-        if prev_cookies != NO_VALUE:
-            logger.debug("Re-using old subscene cookies: %r", prev_cookies)
-            self.session.cookies.update(prev_cookies)
-
-        else:
-            logger.debug("Logging in")
-            self.login()
 
         # re-search for episodes without explicit release name
         if isinstance(video, Episode):
+            titles = list(set([video.series] + video.alternative_series))[:2]
             # term = u"%s S%02iE%02i" % (video.series, video.season, video.episode)
-            more_than_one = len([video.series] + video.alternative_series) > 1
-            for series in set([video.series] + video.alternative_series):
+            more_than_one = len(titles) > 1
+            for series in titles:
                 term = u"%s - %s Season" % (series, p.number_to_words("%sth" % video.season).capitalize())
                 logger.debug('Searching for alternative results: %s', term)
                 film = self.do_search(term, session=self.session, release=False, throttle=self.search_throttle)
@@ -316,8 +332,9 @@ class SubsceneProvider(Provider, ProviderSubtitleArchiveMixin):
                 if more_than_one:
                     time.sleep(self.search_throttle)
         else:
-            more_than_one = len([video.title] + video.alternative_titles) > 1
-            for title in set([video.title] + video.alternative_titles):
+            titles = list(set([video.title] + video.alternative_titles))[:2]
+            more_than_one = len(titles) > 1
+            for title in titles:
                 logger.debug('Searching for movie results: %r', title)
                 film = self.do_search(title, year=video.year, session=self.session, limit_to=None, release=False,
                                       throttle=self.search_throttle)
