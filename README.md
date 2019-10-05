@@ -14,13 +14,17 @@ Check out **[the Sub-Zero Wiki](https://github.com/pannal/Sub-Zero.bundle/wiki)*
 
 ---
 
+**[Kitana is now required to have a UI](https://github.com/pannal/Kitana)**
+
+---
+
 **[The future of Sub-Zero](https://www.reddit.com/r/PleX/comments/9n9qjl/subzero_the_future/)**
 
 ---
 
 ## Helping development
 
-If you like this, buy me a beer: <br>[![Donate](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=G9VKR2B8PMNKG) <br>or become a Patreon starting at **1 $ / month** <br><a href="https://www.patreon.com/subzero_plex" target="_blank"><img src="http://www.wenspencer.com/wp-content/uploads/2017/02/patreon-button.png" height="42" /></a> <br>or use the OpenSubtitles Sub-Zero affiliate link to become VIP <br>**10€/year, ad-free subs, 1000 subs/day, no-cache *VIP* server**<br><a href="http://v.ht/osvip" target="_blank"><img src="https://static.opensubtitles.org/gfx/logo.gif" height="50" /></a> 
+If you like this, buy me a beer: <br>[![Donate](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=G9VKR2B8PMNKG) <br>or become a Patreon starting at **1 $ / month** <br><a href="https://www.patreon.com/subzero_plex" target="_blank"><img src="https://i0.wp.com/tablecakes.com/wp-content/uploads/2018/08/become-a-patron-button.png" height="54" /></a> <br>or use the OpenSubtitles Sub-Zero affiliate link to become VIP <br>**10€/year, ad-free subs, 1000 subs/day, no-cache *VIP* server**<br><a href="http://v.ht/osvip" target="_blank"><img src="https://static.opensubtitles.org/gfx/logo.gif" height="50" /></a> 
 
 If you register with an anti-captcha service and you decide to use [Anti-Captcha.com](http://getcaptchasolution.com/kkvviom7nh), you can use [this affiliate link](http://getcaptchasolution.com/kkvviom7nh) to help development.
 
@@ -91,22 +95,18 @@ the.vbm, mmgoodnow, Vertig0ne, thliu78, tattoomees, ostman, count_confucius, ehe
 ## Changelog
 
 
-2.6.5.3124
+2.6.5.3152
 
-subscene, addic7ed and titlovi
+subscene, addic7ed
 - either of those providers might impose a reCAPTCHA verification. In order to use those providers, please create an account at an AntiCaptcha service ([anti-captcha.com](http://getcaptchasolution.com/kkvviom7nh) or [deathbycaptcha.com](http://deathbycaptcha.com)), add funds, then supply your credentials/apikey in the configuration
 
 Changelog
-- core: http: fallback to default DNS when normal resolving fails; fixes #657
-- core: extract embedded/menu: fix detection of unknown streams; don't use unknown streams if a known language was previously found
-- core: language: use replacement map from bazarr
-- providers: titlovi: fix matching
-- providers: subscene: fix unknown language code error when "empty" result is returned
-- providers: subscene: add support for pt-BR (based on Diaoul/subliminal@b22cf08)
-- providers: subscene: explicitly set account filters for languages
-- providers: subscene: limit alternative searches to 3; set throttle to 8
-- providers: subscene: move login/cookies to initialization sequence
-- submod: generic: en: fix ";='s
+- core: fix core issue possibly impacting results on OpenSubtitles in certain conditions
+- core: fix default values of opensubtitles-skip-wrong-fps, use_https; fix #676
+- core: fix for determining whether to search under certain circumstances; fixes #666
+- core: #664 fix missing language processing of multiple videos refreshed at once
+- core: #661 fix match strictness when determining preexisting external subtitles
+- providers: titlovi: New implementation of Titlovi using API (thanks @viking1304)
 
 
 [older changes](CHANGELOG.md)
