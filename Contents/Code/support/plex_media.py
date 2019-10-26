@@ -1,6 +1,7 @@
 # coding=utf-8
 
 import os
+import subprocess
 
 import helpers
 from items import get_item
@@ -26,6 +27,9 @@ tvdb_guid_identifier = "com.plexapp.agents.thetvdb://"
 
 
 def get_plexapi_stream_info(plex_item, part_id=None):
+    if not plex_item:
+        return
+
     d = {"stream": {}}
     data = d["stream"]
 
@@ -100,6 +104,9 @@ def media_to_videos(media, kind="series"):
                 plex_episode = get_item(ep.id)
                 stream_info = get_plexapi_stream_info(plex_episode)
 
+                if not stream_info:
+                    continue
+
                 for item in media.seasons[season].episodes[episode].items:
                     for part in item.parts:
                         videos.append(
@@ -121,22 +128,24 @@ def media_to_videos(media, kind="series"):
                         )
     else:
         stream_info = get_plexapi_stream_info(plex_item)
-        imdb_id = None
-        if imdb_guid_identifier in media.guid:
-            imdb_id = media.guid[len(imdb_guid_identifier):].split("?")[0]
-        for item in media.items:
-            for part in item.parts:
-                videos.append(
-                    get_metadata_dict(plex_item, part, dict(stream_info, **{"plex_part": part, "type": "movie",
-                                                                             "title": media.title, "id": media.id,
-                                                                             "super_thumb": plex_item.thumb,
-                                                                             "series_id": None, "year": year,
-                                                                             "season_id": None, "imdb_id": imdb_id,
-                                                                             "original_title": original_title,
-                                                                             "series_tvdb_id": None, "tvdb_id": None,
-                                                                             "section": plex_item.section.title})
-                                      )
-                )
+
+        if stream_info:
+            imdb_id = None
+            if imdb_guid_identifier in media.guid:
+                imdb_id = media.guid[len(imdb_guid_identifier):].split("?")[0]
+            for item in media.items:
+                for part in item.parts:
+                    videos.append(
+                        get_metadata_dict(plex_item, part, dict(stream_info, **{"plex_part": part, "type": "movie",
+                                                                                 "title": media.title, "id": media.id,
+                                                                                 "super_thumb": plex_item.thumb,
+                                                                                 "series_id": None, "year": year,
+                                                                                 "season_id": None, "imdb_id": imdb_id,
+                                                                                 "original_title": original_title,
+                                                                                 "series_tvdb_id": None, "tvdb_id": None,
+                                                                                 "section": plex_item.section.title})
+                                          )
+                    )
     return videos
 
 
@@ -174,16 +183,49 @@ def get_all_parts(plex_item):
     return parts
 
 
+def update_stream_info(part):
+    if config.mediainfo_bin and part.container == "mp4":
+        cmdline = '%s --Inform="Text;-%%ID%%_%%Title%%" %s' % (config.mediainfo_bin, helpers.quote(part.file))
+        result = subprocess.check_output(cmdline, stderr=subprocess.PIPE, shell=True)
+        if result:
+            try:
+                stream_titles = {}
+                for pair in result[1:].split("-"):
+                    sid, title = pair.split("_")
+                    stream_titles[int(sid.strip())] = title.strip()
+            except:
+                pass
+            else:
+                filled = []
+                for stream in part.streams:
+                    index = stream.index+1
+                    if index in stream_titles:
+                        stream.title = stream_titles[index]
+                        filled.append(index-1)
+                if filled:
+                    Log.Debug("Filled missing MP4 stream title info for streams: %s", filled)
+
+
+def is_stream_forced(stream):
+    stream_title = getattr(stream, "title", "") or ""
+    forced = getattr(stream, "forced", False)
+    if not forced and stream_title and "forced" in stream_title.strip().lower():
+        forced = True
+
+    return forced
+
+
 def get_embedded_subtitle_streams(part, requested_language=None, skip_duplicate_unknown=True, skip_unknown=False):
     streams = []
     streams_unknown = []
     all_streams = []
     has_unknown = False
     found_requested_language = False
+    update_stream_info(part)
     for stream in part.streams:
         # subtitle stream
         if stream.stream_type == 3 and not stream.stream_key and stream.codec in TEXT_SUBTITLE_EXTS:
-            is_forced = helpers.is_stream_forced(stream)
+            is_forced = is_stream_forced(stream)
             language = helpers.get_language_from_stream(stream.language_code)
             if language:
                 language = Language.rebuild(language, forced=is_forced)
@@ -194,14 +236,14 @@ def get_embedded_subtitle_streams(part, requested_language=None, skip_duplicate_
 
             if not language:
                 # only consider first unknown subtitle stream
-                if requested_language and config.treat_und_as_first:
+                if config.treat_und_as_first:
                     if has_unknown and skip_duplicate_unknown:
                         Log.Debug("skipping duplicate unknown")
                         continue
 
                     language = Language.rebuild(list(config.lang_list)[0], forced=is_forced)
                 else:
-                    language = Language("unk")
+                    language = None
                 is_unknown = True
                 has_unknown = True
                 stream_data = {"stream": stream, "is_unknown": is_unknown, "language": language,
@@ -258,6 +300,9 @@ def get_plex_metadata(rating_key, part_id, item_type, plex_item=None):
         raise helpers.PartUnknownException("Part unknown")
 
     stream_info = get_plexapi_stream_info(plex_item, part_id)
+
+    if not stream_info:
+        return
 
     # get normalized metadata
     # fixme: duplicated logic of media_to_videos

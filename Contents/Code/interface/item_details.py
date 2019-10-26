@@ -12,9 +12,10 @@ from menu_helpers import debounce, SubFolderObjectContainer, default_thumb, add_
 from refresh_item import RefreshItem
 from subzero.constants import PREFIX
 from support.config import config, TEXT_SUBTITLE_EXTS
-from support.helpers import timestamp, df, get_language, display_language, get_language_from_stream, is_stream_forced
+from support.helpers import timestamp, df, get_language, display_language, get_language_from_stream
 from support.items import get_item_kind_from_rating_key, get_item, get_current_sub, get_item_title, save_stored_sub
-from support.plex_media import get_plex_metadata, get_part, get_embedded_subtitle_streams
+from support.plex_media import get_plex_metadata, get_part, get_embedded_subtitle_streams, is_stream_forced, \
+    update_stream_info
 from support.scanning import scan_videos
 from support.scheduler import scheduler
 from support.storage import get_subtitle_storage
@@ -117,6 +118,8 @@ def ItemDetailsMenu(rating_key, title=None, base_title=None, item_title=None, ra
             filename = os.path.basename(part.file)
             if not os.path.exists(part.file):
                 continue
+
+            update_stream_info(part)
 
             part_id = str(part.id)
             part_index += 1
@@ -670,29 +673,28 @@ def ListEmbeddedSubsForItemMenu(**kwargs):
             stream = stream_data["stream"]
             is_forced = stream_data["is_forced"]
 
-            if language:
-                oc.add(DirectoryObject(
-                    key=Callback(TriggerExtractEmbeddedSubForItemMenu, randomize=timestamp(),
-                                 stream_index=str(stream.index), language=language, with_mods=True, **kwargs),
-                    title=_(u"Extract stream %(stream_index)s, %(language)s%(unknown_state)s%(forced_state)s"
-                            u"%(stream_title)s with default mods",
-                            stream_index=stream.index,
-                            language=display_language(language),
-                            unknown_state=_(" (unknown)") if is_unknown else "",
-                            forced_state=_(" (forced)") if is_forced else "",
-                            stream_title=" (\"%s\")" % stream.title if stream.title else ""),
-                ))
-                oc.add(DirectoryObject(
-                    key=Callback(TriggerExtractEmbeddedSubForItemMenu, randomize=timestamp(),
-                                 stream_index=str(stream.index), language=language, **kwargs),
-                    title=_(u"Extract stream %(stream_index)s, %(language)s%(unknown_state)s%(forced_state)s"
-                            u"%(stream_title)s",
-                            stream_index=stream.index,
-                            language=display_language(language),
-                            unknown_state=_(" (unknown)") if is_unknown else "",
-                            forced_state=_(" (forced)") if is_forced else "",
-                            stream_title=" (\"%s\")" % stream.title if stream.title else ""),
-                ))
+            oc.add(DirectoryObject(
+                key=Callback(TriggerExtractEmbeddedSubForItemMenu, randomize=timestamp(),
+                             stream_index=str(stream.index), language=language, with_mods=True, **kwargs),
+                title=_(u"Extract stream %(stream_index)s, %(language)s%(unknown_state)s%(forced_state)s"
+                        u"%(stream_title)s with default mods",
+                        stream_index=stream.index,
+                        language=display_language(language),
+                        unknown_state=_(" (unknown)") if is_unknown else "",
+                        forced_state=_(" (forced)") if is_forced else "",
+                        stream_title=" (\"%s\")" % stream.title if stream.title else ""),
+            ))
+            oc.add(DirectoryObject(
+                key=Callback(TriggerExtractEmbeddedSubForItemMenu, randomize=timestamp(),
+                             stream_index=str(stream.index), language=language, **kwargs),
+                title=_(u"Extract stream %(stream_index)s, %(language)s%(unknown_state)s%(forced_state)s"
+                        u"%(stream_title)s",
+                        stream_index=stream.index,
+                        language=display_language(language),
+                        unknown_state=_(" (unknown)") if is_unknown else "",
+                        forced_state=_(" (forced)") if is_forced else "",
+                        stream_title=" (\"%s\")" % stream.title if stream.title else ""),
+            ))
     return oc
 
 

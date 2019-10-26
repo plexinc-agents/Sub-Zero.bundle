@@ -62,7 +62,7 @@ class SZProviderPool(ProviderPool):
     def __init__(self, providers=None, provider_configs=None, blacklist=None, throttle_callback=None,
                  pre_download_hook=None, post_download_hook=None, language_hook=None):
         #: Name of providers to use
-        self.providers = providers or provider_registry.names()
+        self.providers = providers
 
         #: Provider configuration
         self.provider_configs = provider_configs or {}
@@ -186,12 +186,9 @@ class SZProviderPool(ProviderPool):
         except (requests.Timeout, socket.timeout):
             logger.error('Provider %r timed out', provider)
 
-        except (TooManyRequests, DownloadLimitExceeded, ServiceUnavailable, APIThrottled), e:
-            self.throttle_callback(provider, e)
-            return
-
-        except:
+        except Exception as e:
             logger.exception('Unexpected error in provider %r: %s', provider, traceback.format_exc())
+            self.throttle_callback(provider, e)
 
     def list_subtitles(self, video, languages):
         """List subtitles.
@@ -283,14 +280,10 @@ class SZProviderPool(ProviderPool):
                 logger.debug("RAR Traceback: %s", traceback.format_exc())
                 return False
 
-            except (TooManyRequests, DownloadLimitExceeded, ServiceUnavailable, APIThrottled), e:
-                self.throttle_callback(subtitle.provider_name, e)
-                self.discarded_providers.add(subtitle.provider_name)
-                return False
-
-            except:
+            except Exception as e:
                 logger.exception('Unexpected error in provider %r, Traceback: %s', subtitle.provider_name,
                                  traceback.format_exc())
+                self.throttle_callback(subtitle.provider_name, e)
                 self.discarded_providers.add(subtitle.provider_name)
                 return False
 
@@ -614,9 +607,6 @@ def _search_external_subtitles(path, languages=None, only_one=False, scandir_gen
         if adv_tag:
             forced = "forced" in adv_tag
 
-        # extract the potential language code
-        language_code = p_root.rsplit(".", 1)[1].replace('_', '-')
-
         # remove possible language code for matching
         p_root_bare = ENDSWITH_LANGUAGECODE_RE.sub("", p_root)
 
@@ -629,19 +619,21 @@ def _search_external_subtitles(path, languages=None, only_one=False, scandir_gen
             if match_strictness == "strict" or (match_strictness == "loose" and not filename_contains):
                 continue
 
-        # default language is undefined
-        language = Language('und')
+        language = None
 
-        # attempt to parse
-        if language_code:
+        # extract the potential language code
+        try:
+            language_code = p_root.rsplit(".", 1)[1].replace('_', '-')
             try:
                 language = Language.fromietf(language_code)
                 language.forced = forced
-            except ValueError:
+            except (ValueError, LanguageReverseError):
                 logger.error('Cannot parse language code %r', language_code)
-                language = None
+                language_code = None
+        except IndexError:
+            language_code = None
 
-        elif not language_code and only_one:
+        if not language and not language_code and only_one:
             language = Language.rebuild(list(languages)[0], forced=forced)
 
         subtitles[p] = language
@@ -869,6 +861,9 @@ def save_subtitles(file_path, subtitles, single=False, directory=None, chmod=Non
             logger.debug(u"Saving %r to %r", subtitle, subtitle_path)
             content = subtitle.get_modified_content(format=format, debug=debug_mods)
             if content:
+                if os.path.exists(subtitle_path):
+                    os.remove(subtitle_path)
+
                 with open(subtitle_path, 'w') as f:
                     f.write(content)
                 subtitle.storage_path = subtitle_path

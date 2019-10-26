@@ -22,6 +22,7 @@ from subzero.language import Language
 from subliminal.cli import MutexLock
 from subzero.lib.io import FileIO, get_viable_encoding
 from subzero.lib.dict import Dicked
+from subzero.lib.which import find_executable
 from subzero.util import get_root_path
 from subzero.constants import PLUGIN_NAME, PLUGIN_IDENTIFIER, MOVIE, SHOW, MEDIA_TYPE_TO_STRING
 from subzero.prefs import get_user_prefs, update_user_prefs
@@ -66,6 +67,7 @@ PROVIDER_THROTTLE_MAP = {
         DownloadLimitExceeded: (datetime.timedelta(hours=3), "3 hours"),
         ServiceUnavailable: (datetime.timedelta(minutes=20), "20 minutes"),
         APIThrottled: (datetime.timedelta(minutes=10), "10 minutes"),
+        AuthenticationError: (datetime.timedelta(hours=2), "2 hours"),
     },
     "opensubtitles": {
         TooManyRequests: (datetime.timedelta(hours=3), "3 hours"),
@@ -75,6 +77,7 @@ PROVIDER_THROTTLE_MAP = {
     "addic7ed": {
         DownloadLimitExceeded: (datetime.timedelta(hours=3), "3 hours"),
         TooManyRequests: (datetime.timedelta(minutes=5), "5 minutes"),
+        AuthenticationError: (datetime.timedelta(hours=24), "24 hours"),
     }
 }
 
@@ -153,6 +156,7 @@ class Config(object):
     anticaptcha_token = None
     anticaptcha_cls = None
     has_anticaptcha = False
+    mediainfo_bin = None
 
     store_recently_played_amount = 40
 
@@ -239,6 +243,8 @@ class Config(object):
         self.embedded_auto_extract = cast_bool(Prefs["subtitles.embedded.autoextract"])
         self.ietf_as_alpha3 = cast_bool(Prefs["subtitles.language.ietf_normalize"])
         self.use_custom_dns = self.parse_custom_dns()
+        if not self.advanced.dont_use_mediainfo_mp4:
+            self.mediainfo_bin = self.advanced.mediainfo_bin or find_executable("mediainfo")
         self.initialized = True
 
     def migrate_prefs(self):
@@ -903,10 +909,10 @@ class Config(object):
         throttle_data = PROVIDER_THROTTLE_MAP.get(name, PROVIDER_THROTTLE_MAP["default"]).get(cls, None) or \
             PROVIDER_THROTTLE_MAP["default"].get(cls, None)
 
-        if not throttle_data:
-            return
-
-        throttle_delta, throttle_description = throttle_data
+        if throttle_data:
+            throttle_delta, throttle_description = throttle_data
+        else:
+            throttle_delta, throttle_description = datetime.timedelta(minutes=10), "10 minutes"
 
         if "provider_throttle" not in Dict:
             Dict["provider_throttle"] = {}
