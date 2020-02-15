@@ -30,7 +30,7 @@ from subliminal.core import guessit, ProviderPool, io, is_windows_special_path, 
     ThreadPoolExecutor, check_video
 from subliminal_patch.exceptions import TooManyRequests, APIThrottled
 
-from subzero.language import Language, ENDSWITH_LANGUAGECODE_RE
+from subzero.language import Language, ENDSWITH_LANGUAGECODE_RE, FULL_LANGUAGE_LIST
 from scandir import scandir, scandir_generic as _scandir_generic
 
 logger = logging.getLogger(__name__)
@@ -541,8 +541,12 @@ def scan_video(path, dont_use_actual_file=False, hints=None, providers=None, ski
         if video.size > 10485760:
             logger.debug('Size is %d', video.size)
             osub_hash = None
+
+            if "bsplayer" in providers:
+                video.hashes['bsplayer'] = osub_hash = hash_opensubtitles(hash_path)
+
             if "opensubtitles" in providers:
-                video.hashes['opensubtitles'] = osub_hash = hash_opensubtitles(hash_path)
+                video.hashes['opensubtitles'] = osub_hash = osub_hash or hash_opensubtitles(hash_path)
 
             if "shooter" in providers:
                 video.hashes['shooter'] = hash_shooter(hash_path)
@@ -608,7 +612,8 @@ def _search_external_subtitles(path, languages=None, only_one=False, scandir_gen
             forced = "forced" in adv_tag
 
         # remove possible language code for matching
-        p_root_bare = ENDSWITH_LANGUAGECODE_RE.sub("", p_root)
+        p_root_bare = ENDSWITH_LANGUAGECODE_RE.sub(
+            lambda m: "" if str(m.group(1)).lower() in FULL_LANGUAGE_LIST else m.group(0), p_root)
 
         p_root_lower = p_root_bare.lower()
 

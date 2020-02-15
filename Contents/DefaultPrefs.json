@@ -510,6 +510,18 @@
     "default": ""
   },
   {
+    "id": "provider.bsplayer.enabled",
+    "label": "Provider: Enable BSPlayer Subtitles",
+    "type": "bool",
+    "default": "true"
+  },
+  {
+    "id": "provider.screwzira.enabled",
+    "label": "Provider: Enable ScrewZira (Hebrew)",
+    "type": "bool",
+    "default": "false"
+  },
+  {
     "id": "providers.multithreading",
     "label": "Search enabled providers simultaneously (multithreading)",
     "type": "bool",
@@ -793,6 +805,29 @@
     "label": "Scheduler: Overwrite subtitles with non-default subtitle modifications when better found",
     "type": "bool",
     "default": "false"
+  },
+  {
+    "id": "scheduler.tasks.SubtitleStorageMaintenance.frequency",
+    "label": "Scheduler: Periodically run subtitle storage maintenance (SZ internal)",
+    "type": "enum",
+    "values": [
+      "never",
+      "every 6 hours",
+      "every 12 hours",
+      "every 24 hours",
+      "every 1 days",
+      "every 2 days",
+      "every 3 days",
+      "every 4 days",
+      "every 1 weeks",
+      "every 2 weeks",
+      "every 3 weeks",
+      "every 4 weeks",
+      "every 5 weeks",
+      "every 6 weeks",
+      "every 12 weeks"
+    ],
+    "default": "every 1 weeks"
   },
   {
     "id": "history_size",
